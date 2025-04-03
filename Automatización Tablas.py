@@ -19,16 +19,7 @@ nombre_tabla = input("¿Qué Tabla de Mortalidad quieres usar? Elige entre:\n"
 
 g = int(input("Introduce el año de nacimiento del asegurado/a: "))
 
-def leer_tablas(nombre_tabla):
-    """
-    La función leer_tablas toma el nombre de una pestaña del archivo Excel y devuelve un DataFrame
-    que contiene los datos de esa Tabla de Mortalidad. La primera fila se utiliza como encabezado y 
-    la primera columna se establece como índice (edad x+t).
-    """
-    # Leer la tabla de la hoja especificada
-    df = hojas[nombre_tabla]
-    df.set_index(df.columns[0], inplace=True)  # Establecer la primera columna como índice
-    return df
+
 
 def generacion(g, nombre_tabla):
     '''
@@ -74,36 +65,43 @@ def q_x(qx, mejora, t):
 #Variable que se corresponde con la edad del individuo en el año base (primera edad x+t)
 edad_inicio = generacion(g, nombre_tabla)
 
-x_mas_t_list = list(range(edad_inicio, len(hojas[nombre_tabla]))) #Lista de edades x+t
-edad_t = list(range(0, len(x_mas_t_list))) #Lista de edades t
 
-# Crear un DataFrame vacío para almacenar los resultados
-resultados = pd.DataFrame(columns=['Edad', 'x+t'])
-resultados['x+t'] = x_mas_t_list # Asignar la lista de edades x+t al DataFrame
-resultados['Edad'] = edad_t  # Asignar la lista de edades al DataFrame
+def tabla_gen():
+    x_mas_t_list = list(range(edad_inicio, len(hojas[nombre_tabla]))) #Lista de edades x+t
+    edad_t = list(range(0, len(x_mas_t_list))) #Lista de edades t
 
-
-qx_ajustado = [] # Lista para almacenar los valores de qx ajustados
-
-for i in range(edad_inicio, len(hojas[nombre_tabla])):
-    qx_ajustado.append(q_x(hojas[nombre_tabla].iloc[i, 1], #Coge de la tabla original las qx+t tabla base
-                            hojas[nombre_tabla].iloc[i, 2], #Coge de la tabla original las mejoras
-                            i - edad_inicio)) # i - edad_inicio es el tiempo t
-
-# Asignar la lista de qx ajustados al DataFrame
-resultados.insert(2, 'qx+t ajustado', qx_ajustado)
-
-resultados.set_index('Edad', inplace=True)  # Establecer la columna 'Edad' como índice (Hay que hacerlo aqui, si se hace antes da error)
+    # Crear un DataFrame vacío para almacenar los resultados
+    resultados = pd.DataFrame(columns=['Edad', 'x+t'])
+    resultados['x+t'] = x_mas_t_list # Asignar la lista de edades x+t al DataFrame
+    resultados['Edad'] = edad_t  # Asignar la lista de edades al DataFrame
 
 
-resultados['lx'] = 0  
-resultados.loc[0, 'lx'] = 1000000  #Suponemos 1.000.000 de asegurados al inicio
+    qx_ajustado = [] # Lista para almacenar los valores de qx ajustados
 
-# Calculamos lx y dx fila por fila
-for i in range(1, len(resultados)):
-    resultados.loc[i, 'lx'] = resultados.loc[i-1, 'lx'] * (1 - resultados.loc[i-1, 'qx+t ajustado'])
+    if len(hojas[nombre_tabla]) == 3:   #Diferencia entre tablas de primer orden y las demas
+        for i in range(edad_inicio, len(hojas[nombre_tabla])):
+            qx_ajustado.append(q_x(hojas[nombre_tabla].iloc[i, 1], #Coge de la tabla original las qx+t tabla base
+                                    hojas[nombre_tabla].iloc[i, 2], #Coge de la tabla original las mejoras
+                                    i - edad_inicio)) # i - edad_inicio es el tiempo t
+    else:
+        for i in range(edad_inicio, len(hojas[nombre_tabla])):
+            qx_ajustado.append(q_x(hojas[nombre_tabla].iloc[i, 2],
+                                    hojas[nombre_tabla].iloc[i, 4],
+                                    i - edad_inicio)) # i - edad_inicio es el tiempo t
 
-resultados['dx'] = resultados['lx'] * resultados['qx+t ajustado']
+    # Asignar la lista de qx ajustados al DataFrame
+    resultados.insert(2, 'qx+t ajustado', qx_ajustado)
+
+    resultados.set_index('Edad', inplace=True)  # Establecer la columna 'Edad' como índice (Hay que hacerlo aqui, si se hace antes da error)
 
 
-print(resultados)
+    resultados['lx'] = 0
+    resultados.loc[0, 'lx'] = 1000000  #Suponemos 1.000.000 de asegurados al inicio
+
+    # Calculamos lx y dx fila por fila
+    for i in range(1, len(resultados)):
+        resultados.loc[i, 'lx'] = resultados.loc[i-1, 'lx'] * (1 - resultados.loc[i-1, 'qx+t ajustado'])
+
+    resultados['dx'] = resultados['lx'] * resultados['qx+t ajustado']
+
+    return resultados
