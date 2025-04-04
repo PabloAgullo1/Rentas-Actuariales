@@ -97,6 +97,7 @@ def tabla_gen():
 
     resultados['lx'] = 0
     resultados.loc[0, 'lx'] = 1000000  #Suponemos 1.000.000 de asegurados al inicio
+    resultados['lx'] = resultados['lx'].astype(float)
 
     # Calculamos lx y dx fila por fila
     for i in range(1, len(resultados)):
@@ -105,3 +106,4 @@ def tabla_gen():
     resultados['dx'] = resultados['lx'] * resultados['qx+t ajustado']
 
     return resultados
+print(tabla_gen())
