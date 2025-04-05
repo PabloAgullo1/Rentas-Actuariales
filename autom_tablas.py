@@ -78,12 +78,12 @@ def tabla_gen():
 
     qx_ajustado = [] # Lista para almacenar los valores de qx ajustados
 
-    if len(hojas[nombre_tabla]) == 3:   #Diferencia entre tablas de primer orden y las demas
+    if hojas[nombre_tabla].shape[1] == 3:   # Comprobar si el número de columnas en el DataFrame es 3
         for i in range(edad_inicio, len(hojas[nombre_tabla])):
             qx_ajustado.append(q_x(hojas[nombre_tabla].iloc[i, 1], #Coge de la tabla original las qx+t tabla base
                                     hojas[nombre_tabla].iloc[i, 2], #Coge de la tabla original las mejoras
                                     i - edad_inicio)) # i - edad_inicio es el tiempo t
-    else:
+    elif hojas[nombre_tabla].shape[1] == 5: # Comprobar si el número de columnas en el DataFrame es 5 (Tablas 1er orden)
         for i in range(edad_inicio, len(hojas[nombre_tabla])):
             qx_ajustado.append(q_x(hojas[nombre_tabla].iloc[i, 2],
                                     hojas[nombre_tabla].iloc[i, 4],
