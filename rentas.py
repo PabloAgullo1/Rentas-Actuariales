@@ -61,32 +61,46 @@ Hace falta otra funcion para englobarlas todas y para
 introducir diferentes parametros en estas funciones segun 
 sean temporales o vitalicias. ESTAN POR COMPROBAR!!
 """
-def prepa(fin, difer = None): 
-    if difer == None:
-        sumatorio = 1
-        for i in range(1, fin):
-            val_medio = tpx(at.edad_inicio, i)
-            vk = v(interes, i)
-            sumatorio += val_medio * vk
-    else:
-        sumatorio = 0
-        for i in range(difer, fin):
-            val_medio = tpx(at.edad_inicio, i)
-            vk = v(interes, i)
-            sumatorio += val_medio * vk
-    return sumatorio
+tipo_renta = input("dime el tipo de renta (prepagable / pospagable):")
 
-def pospa(fin, difer = None): 
-    if difer == None:
-        sumatorio = 0
-        for i in range(1, fin):
-            val_medio = tpx(at.edad_inicio, i)
-            vk = v(interes, i)
-            sumatorio += val_medio * vk
-    else:
-        sumatorio = 0
-        for i in range(difer + 1, fin):
-            val_medio = tpx(at.edad_inicio, i)
-            vk = v(interes, i)
-            sumatorio += val_medio * vk
-    return sumatorio
+def renta(a):
+
+    def prepa(fin, difer = None): 
+        if difer == None:
+            sumatorio = 1
+            for i in range(1, fin):
+                val_medio = tpx(at.edad_inicio, i)
+                vk = v(interes, i)
+                sumatorio += val_medio * vk
+        else:
+            sumatorio = 0
+            for i in range(difer, fin):
+                val_medio = tpx(at.edad_inicio, i)
+                vk = v(interes, i)
+                sumatorio += val_medio * vk
+        return sumatorio
+
+    def pospa(fin, difer = None): 
+        if difer == None:
+            sumatorio = 0
+            for i in range(1, fin):
+                val_medio = tpx(at.edad_inicio, i)
+                vk = v(interes, i)
+                sumatorio += val_medio * vk
+        else:
+            sumatorio = 0
+            for i in range(difer + 1, fin):
+                val_medio = tpx(at.edad_inicio, i)
+                vk = v(interes, i)
+                sumatorio += val_medio * vk
+        return sumatorio
+    if a == "prepagable":
+        return prepa
+    elif a == "pospagable":
+        return pospa
+    else: 
+        return ValueError("Solo se acepta 'prepagable' y 'pospagable'")
+
+aaa = renta(tipo_renta) #ejemplo funcionamiento
+print(aaa(15))          #ejemplo funcionamiento
+
