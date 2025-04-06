@@ -61,7 +61,7 @@ Hace falta otra funcion para englobarlas todas y para
 introducir diferentes parametros en estas funciones segun 
 sean temporales o vitalicias. ESTAN POR COMPROBAR!!
 """
-def prepa(inicio, fin, difer = None): 
+def prepa(fin, difer = None): 
     if difer == None:
         sumatorio = 1
         for i in range(1, fin):
@@ -76,7 +76,7 @@ def prepa(inicio, fin, difer = None):
             sumatorio += val_medio * vk
     return sumatorio
 
-def pospa(inicio, fin, difer = None): 
+def pospa(fin, difer = None): 
     if difer == None:
         sumatorio = 0
         for i in range(1, fin):
