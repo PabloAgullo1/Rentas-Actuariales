@@ -1,7 +1,7 @@
 import autom_tablas as at
 import pandas as pd
 
-#i = int(input("Tipo de interes en porcentaje:"))/100
+interes = int(input("Tipo de interes en porcentaje:"))/100
 #n = int(input("Número de años de la renta:")) #Numero de años de duración de la renta
 
 def v(i,n):
@@ -52,3 +52,41 @@ def tqx(tpx):
 
 print(tpx(43,22))
 print(tqx(tpx(43,7))) #Ejemplos del libro pagina 49 por comprobación.
+
+
+""" 
+funciones de renta prepagable y pospagable. 
+Destinadas a cubrir todo tipo de rentas (basicas)
+Hace falta otra funcion para englobarlas todas y para
+introducir diferentes parametros en estas funciones segun 
+sean temporales o vitalicias. ESTAN POR COMPROBAR!!
+"""
+def prepa(inicio, fin, difer = None): 
+    if difer == None:
+        sumatorio = 1
+        for i in range(1, fin):
+            val_medio = tpx(at.edad_inicio, i)
+            vk = v(interes, i)
+            sumatorio += val_medio * vk
+    else:
+        sumatorio = 0
+        for i in range(difer, fin):
+            val_medio = tpx(at.edad_inicio, i)
+            vk = v(interes, i)
+            sumatorio += val_medio * vk
+    return sumatorio
+
+def pospa(inicio, fin, difer = None): 
+    if difer == None:
+        sumatorio = 0
+        for i in range(1, fin):
+            val_medio = tpx(at.edad_inicio, i)
+            vk = v(interes, i)
+            sumatorio += val_medio * vk
+    else:
+        sumatorio = 0
+        for i in range(difer + 1, fin):
+            val_medio = tpx(at.edad_inicio, i)
+            vk = v(interes, i)
+            sumatorio += val_medio * vk
+    return sumatorio
