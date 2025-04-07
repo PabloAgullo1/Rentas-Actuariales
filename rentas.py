@@ -1,8 +1,25 @@
 import autom_tablas as at
 import pandas as pd
 
-interes = int(input("Tipo de interes en porcentaje:"))/100
-#n = int(input("Número de años de la renta:")) #Numero de años de duración de la renta
+#MODO_DEV sirve para hacer pruevas sin tener que meter los datos cada vez. Una vez listo, se eliminará.
+MODO_DEV = True
+
+if MODO_DEV:
+    interes = 0.035
+    tipo_renta = "pospagable"
+    edad_renta = 44
+    capital = 25000
+    temporalidad = None
+    diferimiento = 21
+else:
+    interes = int(input("Tipo de interes en porcentaje:"))/100
+    tipo_renta = input("Introduce el tipo de renta (prepagable / pospagable): ")
+    edad_renta = int(input("Edad al momento de contratación de la renta: "))
+
+    capital = float(input("Introduce el capital a asegurar: "))
+    temporalidad = int(input("Temporalidad de la renta (en caso de vitalicia pulse enter): ")) or None
+    diferimiento = input("Diferimiento en años (True o si no hay pulsa enter): ") or None
+
 
 def v(i,n):
     return (1+ i)**(-n)
@@ -53,25 +70,6 @@ def tqx(tpx):
 #print(tpx(43,22))
 #print(tqx(tpx(43,7))) #Ejemplos del libro pagina 49 por comprobación.
 
- 
-#MACROFUNCION!!!
-#Quedan establecer los posibles errores (ValueError)
-#Falta hacer comprobacón
-
-tipo_renta = input("Introduce el tipo de renta (prepagable / pospagable): ")
-edad_renta = int(input("Edad al momento de contratación de la renta: "))
-
-capital = float(input("Introduce el capital a asegurar: "))
-temporalidad = int(input("La renta es vitalicia (0) o temporal (1): "))
-if temporalidad == 0:
-        temporalidad = None
-elif temporalidad == 1:
-        temporalidad = int(input("Duración de la renta: "))
-else:
-        raise ValueError("El valor debe ser '0' para vitalicia o '1' para temporal")
-
-diferimiento = input("Diferimiento en años (True o si no hay pulsa enter): ") or None
-
 
 #Creamos la clase renta, de la cual hemos definido sus parámetros previamente
 
@@ -81,7 +79,7 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento):
             sumatorio = 1
             if temporalidad == None: #Renta vitalicia
                 
-                w_menosx_menos = int(at.tabla_generacion.iloc[-1]["x+t"] - edad_renta)
+                w_menosx = int(at.tabla_generacion.iloc[-1]["x+t"] - edad_renta)
 
                 for i in range(1, w_menosx):
                     val_medio = tpx(edad_renta, i)
