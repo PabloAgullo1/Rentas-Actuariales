@@ -59,29 +59,37 @@ MACROFUNCION!!!
 Quedan establecer los posibles errores (ValueError)
 Falta hacer comprobacón
 """
+tipo_renta = input("Introduce el tipo de renta (prepagable / pospagable): ")
+edad_renta = int(input("Edad al momento de contratación de la renta: "))
 
-
-def renta(a):
-
-    tipo_renta = input("dime el tipo de renta (prepagable / pospagable):")
-    edad_renta = input("edad al momento de contratación de la renta:")
-
-    capital = input("Introduce el capital a asegurar:")
-    temporalidad = input("La renta es vitalicia (0) o temporal (1)")
-    if temporalidad == 0:
+capital = float(input("Introduce el capital a asegurar: "))
+temporalidad = int(input("La renta es vitalicia (0) o temporal (1): "))
+if temporalidad == 0:
         temporalidad = None
-    elif temporalidad == 1:
-        temporalidad = input("Duración de la renta:")
-    else:
-        print(ValueError("El valor debe ser '0' para vitalicia o '1' para temporal"))
+elif temporalidad == 1:
+        temporalidad = input("Duración de la renta: ")
+else:
+        raise ValueError("El valor debe ser '0' para vitalicia o '1' para temporal")
 
-    diferimiento = input("Diferimiento: (si no hay pulsa enter)") or None
+diferimiento = input("Diferimiento en años (True o si no hay pulsa enter): ") or None
 
 
-    def prepa(duracion = None, difer = None): 
-        if difer == None:
+#Creamos la clase renta, de la cual hemos definido sus parámetros previamente
+
+class Renta():
+
+    def __init__(self, tipo_renta, edad_renta, capital, temporalidad, diferimiento):
+        self.tipo_renta = tipo_renta
+        self.edad_renta = edad_renta
+
+        self.capital = capital
+        self.temporalidad = temporalidad
+        self.diferimiento = diferimiento
+
+    def prepa(self): 
+        if diferimiento == None: #Renta prepagable, anual, inmediata
             sumatorio = 1
-            if duracion == None:
+            if temporalidad == None: #Renta vitalicia
                 
                 w_menosx_menos1 = at.tabla_generacion["x+t"].iloc[-1] - edad_renta - 1
 
@@ -89,61 +97,61 @@ def renta(a):
                     val_medio = tpx(edad_renta, i)
                     vk = v(interes, i)
                     sumatorio += val_medio * vk
-            else:
-                for i in range(1, duracion - 1):
+            else: #Renta temporal
+                for i in range(1, temporalidad - 1):
                     val_medio = tpx(edad_renta, i)
                     vk = v(interes, i)
                     sumatorio += val_medio * vk
-        else:
+        else: #Renta prepagable, anual, diferida
             sumatorio = 0
-            if duracion == None:
+            if temporalidad == None:
 
                 w_menosx_menos1 = at.tabla_generacion["x+t"].iloc[-1] - edad_renta - 1
                 
-                for i in range(difer, w_menosx_menos1):
+                for i in range(diferimiento, w_menosx_menos1): #Vitalicia
                     val_medio = tpx(edad_renta, i)
                     vk = v(interes, i)
                     sumatorio += val_medio * vk
             else:
-                for i in range(difer, duracion - 1):
+                for i in range(diferimiento, temporalidad - 1): #Temporal
                     val_medio = tpx(edad_renta, i)
                     vk = v(interes, i)
                     sumatorio += val_medio * vk
-        return sumatorio
+        return "El valor actual actuarial es " + sumatorio + "\n" "Y el valor de la renta actuarial es " + capital * sumatorio
 
-    def pospa(duracion = None, difer = None): 
-        if difer == None:
+    def pospa(self): 
+        if diferimiento == None: #Renta pospagable, anual, inmediata
             sumatorio = 0
-            if duracion == None:
+            if temporalidad == None:
                 
-                w_menosx_menos1 = at.tabla_generacion["x+t"].iloc[-1] - edad_renta - 1
+                w_menosx_menos1 = int(at.tabla_generacion.iloc[-1]["x+t"] - edad_renta - 1)
+
                 for i in range(1, w_menosx_menos1):
                     val_medio = tpx(edad_renta, i)
                     vk = v(interes, i)
                     sumatorio += val_medio * vk
             else:
-                for i in range(1, duracion):
+                for i in range(1, temporalidad):
                     val_medio = tpx(edad_renta, i)
                     vk = v(interes, i)
                     sumatorio += val_medio * vk
         else:
             sumatorio = 0
-            if duracion == None:
+            if temporalidad == None:
 
-                w_menosx_menos1 = at.tabla_generacion["x+t"].iloc[-1] - edad_renta - 1
-                for i in range(difer + 1, w_menosx_menos1):
+                w_menosx_menos1 = int(at.tabla_generacion.iloc[-1]["x+t"] - edad_renta - 1)
+                for i in range(diferimiento + 1, w_menosx_menos1):
                     val_medio = tpx(edad_renta, i)
                     vk = v(interes, i)
                     sumatorio += val_medio * vk
             else:
-                for i in range(1, duracion):
+                for i in range(1, temporalidad):
                     val_medio = tpx(edad_renta, i)
                     vk = v(interes, i)
                     sumatorio += val_medio * vk
-        return sumatorio
-    if a == "prepagable":
-        return prepa
-    elif a == "pospagable":
-        return pospa
-    else: 
-        return ValueError("Solo se acepta 'prepagable' y 'pospagable'")
+        return float(sumatorio), float(capital * sumatorio)
+
+    
+renta = Renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento)
+renta_anual = renta.pospa()
+print(renta_anual)
