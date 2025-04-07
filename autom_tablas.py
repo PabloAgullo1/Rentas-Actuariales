@@ -106,4 +106,7 @@ def tabla_gen():
     resultados['dx'] = resultados['lx'] * resultados['qx+t ajustado']
 
     return resultados
-print(tabla_gen())
+
+tabla_generacion = tabla_gen()
+
+print(tabla_generacion)
