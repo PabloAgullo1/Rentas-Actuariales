@@ -50,49 +50,96 @@ def tqx(tpx):
 def tqx(tpx):
     return 1 - tpx
 
-print(tpx(43,22))
-print(tqx(tpx(43,7))) #Ejemplos del libro pagina 49 por comprobación.
+#print(tpx(43,22))
+#print(tqx(tpx(43,7))) #Ejemplos del libro pagina 49 por comprobación.
 
 
 """ 
-funciones de renta prepagable y pospagable. 
-Destinadas a cubrir todo tipo de rentas (basicas)
-Hace falta otra funcion para englobarlas todas y para
-introducir diferentes parametros en estas funciones segun 
-sean temporales o vitalicias. ESTAN POR COMPROBAR!!
+MACROFUNCION!!!
+Quedan establecer los posibles errores (ValueError)
+Falta hacer comprobacón
 """
-tipo_renta = input("dime el tipo de renta (prepagable / pospagable):")
+
 
 def renta(a):
 
-    def prepa(fin, difer = None): 
+    tipo_renta = input("dime el tipo de renta (prepagable / pospagable):")
+    edad_renta = input("edad al momento de contratación de la renta:")
+
+    capital = input("Introduce el capital a asegurar:")
+    temporalidad = input("La renta es vitalicia (0) o temporal (1)")
+    if temporalidad == 0:
+        temporalidad = None
+    elif temporalidad == 1:
+        temporalidad = input("Duración de la renta:")
+    else:
+        print(ValueError("El valor debe ser '0' para vitalicia o '1' para temporal"))
+
+    diferimiento = input("Diferimiento: (si no hay pulsa enter)") or None
+
+
+    def prepa(duracion = None, difer = None): 
         if difer == None:
             sumatorio = 1
-            for i in range(1, fin):
-                val_medio = tpx(at.edad_inicio, i)
-                vk = v(interes, i)
-                sumatorio += val_medio * vk
+            if duracion == None:
+                
+                w_menosx_menos1 = at.tabla_generacion["x+t"].iloc[-1] - edad_renta - 1
+
+                for i in range(1, w_menosx_menos1):
+                    val_medio = tpx(edad_renta, i)
+                    vk = v(interes, i)
+                    sumatorio += val_medio * vk
+            else:
+                for i in range(1, duracion - 1):
+                    val_medio = tpx(edad_renta, i)
+                    vk = v(interes, i)
+                    sumatorio += val_medio * vk
         else:
             sumatorio = 0
-            for i in range(difer, fin):
-                val_medio = tpx(at.edad_inicio, i)
-                vk = v(interes, i)
-                sumatorio += val_medio * vk
+            if duracion == None:
+
+                w_menosx_menos1 = at.tabla_generacion["x+t"].iloc[-1] - edad_renta - 1
+                
+                for i in range(difer, w_menosx_menos1):
+                    val_medio = tpx(edad_renta, i)
+                    vk = v(interes, i)
+                    sumatorio += val_medio * vk
+            else:
+                for i in range(difer, duracion - 1):
+                    val_medio = tpx(edad_renta, i)
+                    vk = v(interes, i)
+                    sumatorio += val_medio * vk
         return sumatorio
 
-    def pospa(fin, difer = None): 
+    def pospa(duracion = None, difer = None): 
         if difer == None:
             sumatorio = 0
-            for i in range(1, fin):
-                val_medio = tpx(at.edad_inicio, i)
-                vk = v(interes, i)
-                sumatorio += val_medio * vk
+            if duracion == None:
+                
+                w_menosx_menos1 = at.tabla_generacion["x+t"].iloc[-1] - edad_renta - 1
+                for i in range(1, w_menosx_menos1):
+                    val_medio = tpx(edad_renta, i)
+                    vk = v(interes, i)
+                    sumatorio += val_medio * vk
+            else:
+                for i in range(1, duracion):
+                    val_medio = tpx(edad_renta, i)
+                    vk = v(interes, i)
+                    sumatorio += val_medio * vk
         else:
             sumatorio = 0
-            for i in range(difer + 1, fin):
-                val_medio = tpx(at.edad_inicio, i)
-                vk = v(interes, i)
-                sumatorio += val_medio * vk
+            if duracion == None:
+
+                w_menosx_menos1 = at.tabla_generacion["x+t"].iloc[-1] - edad_renta - 1
+                for i in range(difer + 1, w_menosx_menos1):
+                    val_medio = tpx(edad_renta, i)
+                    vk = v(interes, i)
+                    sumatorio += val_medio * vk
+            else:
+                for i in range(1, duracion):
+                    val_medio = tpx(edad_renta, i)
+                    vk = v(interes, i)
+                    sumatorio += val_medio * vk
         return sumatorio
     if a == "prepagable":
         return prepa
@@ -100,7 +147,3 @@ def renta(a):
         return pospa
     else: 
         return ValueError("Solo se acepta 'prepagable' y 'pospagable'")
-
-aaa = renta(tipo_renta) #ejemplo funcionamiento
-print(aaa(15))          #ejemplo funcionamiento
-
