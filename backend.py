@@ -173,6 +173,44 @@ def tqx(tpx_value):
     """
     return 1 - tpx_value
 
+#funcion progresiones: la idea es icorporarla en la funcion renta y que se itere junto
+#  con el tpx y el vx en el range de cada tipo de renta. En caso de duda contactad con el autor  
+# Muchas gracias por su tiempo :)
+def progresion(tipo_renta, capital,tipo_progresion, k, h, diferimiento = None):
+    if tipo_renta == "prepagable":
+        if tipo_progresion == "aritmetica":
+            if diferimiento is None:
+                cap = capital + k * h
+            else:
+                deferimiento = int(deferimiento)
+                cap = capital + (k-diferimiento) * h
+        
+        elif tipo_progresion == "geometrica":
+            if diferimiento is None:
+                cap = capital * (h**k)
+            else:
+                diferimiento = int(diferimiento)
+                cap = capital * (h**(k-diferimiento))
+
+    elif tipo_renta == "pospagable":
+        if tipo_progresion == "aritmetica":
+            if diferimiento is None:
+                cap = capital + (k-1) * h    
+            else: 
+                diferimiento = int(diferimiento)
+                cap = capital + (k - diferimiento - 1) * h   
+        
+        elif tipo_progresion == "geometrica":
+            if diferimiento is None:
+                cap = capital * (h**(k - 1))
+            else:
+                diferimiento = int(diferimiento)
+                cap = capital * (h**(k-diferimiento - 1))
+    return cap
+
+
+
+
 def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes, tabla_generacion):
     """
     Calcula el valor actual actuarial y el valor de la renta actuarial.
