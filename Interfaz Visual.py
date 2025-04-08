@@ -43,66 +43,158 @@ def calcular():
         sumatorio, valor_renta = renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes, tabla_generacion)
         resultado_label.config(text=f"Valor actual actuarial: {sumatorio:.2f}\nValor de la renta actuarial: {valor_renta:.2f}")
     except Exception as e:
-        resultado_label.config(text=f"Error: {str(e)}")
+        resultado_label.config(text=f"Error: {str(e)}", fg="red")
 
-# Interfaz gráfica
+# Crear la ventana principal
 root = tk.Tk()
-root.title("Calculadora de Renta Actuarial")
+root.title("Jupama Actuarial Software")
+root.geometry("600x700")  # Tamaño de la ventana
+root.configure(bg="#f0f4f8")  # Fondo gris claro
+
+# Estilo para los widgets
+style = ttk.Style()
+style.configure("TLabel", background="#f0f4f8", font=("Helvetica", 11))
+style.configure("TEntry", font=("Helvetica", 11))
+style.configure("TCombobox", font=("Helvetica", 11))
+style.configure("TButton", font=("Helvetica", 12, "bold"))
+
+# Encabezado
+header_frame = tk.Frame(root, bg="#2c3e50", pady=20)
+header_frame.pack(fill="x")
+
+# Título del programa
+header_label = tk.Label(
+    header_frame,
+    text="Jupama Actuarial Software",
+    font=("Helvetica", 20, "bold"),
+    fg="white",
+    bg="#2c3e50"
+)
+header_label.pack()
+
+# Subtítulo
+subtitle_label = tk.Label(
+    header_frame,
+    text="Cálculo de Rentas Actuariales",
+    font=("Helvetica", 12, "italic"),
+    fg="#dcdcdc",
+    bg="#2c3e50"
+)
+subtitle_label.pack()
+
+# Frame principal para las entradas
+main_frame = tk.Frame(root, bg="#f0f4f8", padx=20, pady=20)
+main_frame.pack(fill="both", expand=True)
+
+# Frame para las entradas (sección de datos)
+input_frame = tk.LabelFrame(
+    main_frame,
+    text="Datos de Entrada",
+    font=("Helvetica", 14, "bold"),
+    bg="#f0f4f8",
+    fg="#2c3e50",
+    padx=15,
+    pady=15
+)
+input_frame.pack(fill="x", pady=10)
 
 # Año de nacimiento
-tk.Label(root, text="Año de nacimiento:").grid(row=0, column=0, padx=5, pady=5)
-entry_anio_nacimiento = tk.Entry(root)
-entry_anio_nacimiento.grid(row=0, column=1)
+tk.Label(input_frame, text="Año de nacimiento:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=0, column=0, padx=5, pady=5, sticky="e")
+entry_anio_nacimiento = ttk.Entry(input_frame)
+entry_anio_nacimiento.grid(row=0, column=1, padx=5, pady=5, sticky="w")
 
 # Tabla de mortalidad
-tk.Label(root, text="Tabla de mortalidad:").grid(row=1, column=0, padx=5, pady=5)
-combo_tabla = ttk.Combobox(root, values=['PERM2000C', 'PERF2000C', 'PERM2000P', 'PERF2000P',
-                                         'PERM_2020_Indiv_2Orden', 'PERM_2020_Indiv_1Orden',
-                                         'PERF_2020_Indiv_2Orden', 'PERF_2020_Indiv_1Orden',
-                                         'PERM_2020_Colectivos_2Orden', 'PERM_2020_Colectivos_1Orden',
-                                         'PERF_2020_Colectivos_2Orden', 'PERF_2020_Colectivos_1Orden'])
-combo_tabla.grid(row=1, column=1)
+tk.Label(input_frame, text="Tabla de mortalidad:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=1, column=0, padx=5, pady=5, sticky="e")
+combo_tabla = ttk.Combobox(
+    input_frame,
+    values=['PERM2000C', 'PERF2000C', 'PERM2000P', 'PERF2000P',
+            'PERM_2020_Indiv_2Orden', 'PERM_2020_Indiv_1Orden',
+            'PERF_2020_Indiv_2Orden', 'PERF_2020_Indiv_1Orden',
+            'PERM_2020_Colectivos_2Orden', 'PERM_2020_Colectivos_1Orden',
+            'PERF_2020_Colectivos_2Orden', 'PERF_2020_Colectivos_1Orden'],
+    state="readonly"
+)
+combo_tabla.grid(row=1, column=1, padx=5, pady=5, sticky="w")
 
 # Tasa de interés
-tk.Label(root, text="Tasa de interés (%):").grid(row=2, column=0, padx=5, pady=5)
-entry_interes = tk.Entry(root)
-entry_interes.grid(row=2, column=1)
+tk.Label(input_frame, text="Tasa de interés (%):", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=2, column=0, padx=5, pady=5, sticky="e")
+entry_interes = ttk.Entry(input_frame)
+entry_interes.grid(row=2, column=1, padx=5, pady=5, sticky="w")
 
 # Tipo de renta
-tk.Label(root, text="Tipo de renta:").grid(row=3, column=0, padx=5, pady=5)
-combo_tipo_renta = ttk.Combobox(root, values=["prepagable", "pospagable"])
-combo_tipo_renta.grid(row=3, column=1)
+tk.Label(input_frame, text="Tipo de renta:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=3, column=0, padx=5, pady=5, sticky="e")
+combo_tipo_renta = ttk.Combobox(input_frame, values=["prepagable", "pospagable"], state="readonly")
+combo_tipo_renta.grid(row=3, column=1, padx=5, pady=5, sticky="w")
 
 # Edad al momento de contratación
-tk.Label(root, text="Edad al momento de contratación:").grid(row=4, column=0, padx=5, pady=5)
-entry_edad_renta = tk.Entry(root)
-entry_edad_renta.grid(row=4, column=1)
+tk.Label(input_frame, text="Edad al momento de contratación:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=4, column=0, padx=5, pady=5, sticky="e")
+entry_edad_renta = ttk.Entry(input_frame)
+entry_edad_renta.grid(row=4, column=1, padx=5, pady=5, sticky="w")
 
 # Capital a asegurar
-tk.Label(root, text="Capital a asegurar:").grid(row=5, column=0, padx=5, pady=5)
-entry_capital = tk.Entry(root)
-entry_capital.grid(row=5, column=1)
+tk.Label(input_frame, text="Capital a asegurar:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=5, column=0, padx=5, pady=5, sticky="e")
+entry_capital = ttk.Entry(input_frame)
+entry_capital.grid(row=5, column=1, padx=5, pady=5, sticky="w")
 
 # Temporalidad (vitalicia o temporal)
-tk.Label(root, text="Temporalidad:").grid(row=6, column=0, padx=5, pady=5)
-combo_temporalidad = ttk.Combobox(root, values=["Vitalicia", "Temporal"])
-combo_temporalidad.grid(row=6, column=1)
+tk.Label(input_frame, text="Temporalidad:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=6, column=0, padx=5, pady=5, sticky="e")
+combo_temporalidad = ttk.Combobox(input_frame, values=["Vitalicia", "Temporal"], state="readonly")
+combo_temporalidad.grid(row=6, column=1, padx=5, pady=5, sticky="w")
 
 # Duración (si es temporal)
-tk.Label(root, text="Duración (si temporal):").grid(row=7, column=0, padx=5, pady=5)
-entry_duracion = tk.Entry(root)
-entry_duracion.grid(row=7, column=1)
+tk.Label(input_frame, text="Duración (si temporal):", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=7, column=0, padx=5, pady=5, sticky="e")
+entry_duracion = ttk.Entry(input_frame)
+entry_duracion.grid(row=7, column=1, padx=5, pady=5, sticky="w")
 
 # Diferimiento
-tk.Label(root, text="Diferimiento en años (dejar vacío si no hay):").grid(row=8, column=0, padx=5, pady=5)
-entry_diferimiento = tk.Entry(root)
-entry_diferimiento.grid(row=8, column=1)
+tk.Label(input_frame, text="Diferimiento en años (dejar vacío si no hay):", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=8, column=0, padx=5, pady=5, sticky="e")
+entry_diferimiento = ttk.Entry(input_frame)
+entry_diferimiento.grid(row=8, column=1, padx=5, pady=5, sticky="w")
+
+# Frame para el botón de cálculo
+button_frame = tk.Frame(main_frame, bg="#f0f4f8")
+button_frame.pack(pady=10)
 
 # Botón para calcular
-ttk.Button(root, text="Calcular", command=calcular).grid(row=9, column=0, columnspan=2, pady=10)
+calcular_button = ttk.Button(button_frame, text="Calcular", command=calcular, style="Accent.TButton")
+style.configure("Accent.TButton", background="#3498db", foreground="white", font=("Helvetica", 12, "bold"))
+calcular_button.pack()
+
+# Frame para los resultados
+result_frame = tk.LabelFrame(
+    main_frame,
+    text="Resultados",
+    font=("Helvetica", 14, "bold"),
+    bg="#f0f4f8",
+    fg="#2c3e50",
+    padx=15,
+    pady=15
+)
+result_frame.pack(fill="x", pady=10)
 
 # Etiqueta para mostrar el resultado
-resultado_label = tk.Label(root, text="")
-resultado_label.grid(row=10, column=0, columnspan=2)
+resultado_label = tk.Label(
+    result_frame,
+    text="",
+    font=("Helvetica", 12),
+    bg="#f0f4f8",
+    fg="#2c3e50",
+    justify="left"
+)
+resultado_label.pack()
 
+# Footer
+footer_frame = tk.Frame(root, bg="#2c3e50", pady=10)
+footer_frame.pack(fill="x", side="bottom")
+
+footer_label = tk.Label(
+    footer_frame,
+    text="© 2025 Jupama Actuarial Software. Todos los derechos reservados.",
+    font=("Helvetica", 10),
+    fg="#dcdcdc",
+    bg="#2c3e50"
+)
+footer_label.pack()
+
+# Iniciar la aplicación
 root.mainloop()
