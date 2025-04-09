@@ -1,7 +1,37 @@
 # frontend.py
 import tkinter as tk
 from tkinter import ttk
+import pandas as pd
+import backend  # Importamos el módulo backend
+print("Ruta del módulo backend:", backend.__file__)  # Imprime la ruta del archivo backend.py que se está usando
 from backend import tabla_gen, renta
+
+# Función para limpiar la tabla anterior
+def limpiar_tabla(tree):
+    for item in tree.get_children():
+        tree.delete(item)
+
+# Función para mostrar la tabla
+def mostrar_tabla(tabla_flujos, tree):
+    limpiar_tabla(tree)
+    
+    # Mostrar las primeras 7 filas y las últimas 7 filas
+    total_filas = len(tabla_flujos)
+    if total_filas <= 14:
+        filas_mostrar = tabla_flujos
+    else:
+        primeras_filas = tabla_flujos.iloc[:7]
+        ultimas_filas = tabla_flujos.iloc[-7:]
+        filas_mostrar = pd.concat([primeras_filas, ultimas_filas])
+
+    for index, row in filas_mostrar.iterrows():
+        tree.insert("", tk.END, values=(
+            int(row['k']),
+            f"{row['v^k']:.6f}",
+            f"{row['k p_x']:.6f}",
+            f"{row['v^k * k p_x']:.6f}",
+            f"{row['C * v^k * k p_x']:.2f}"
+        ))
 
 # Función principal de cálculo
 def calcular():
@@ -36,20 +66,45 @@ def calcular():
         else:
             diferimiento = int(diferimiento)
 
+        # Tipo de ajuste
+        ajuste_seleccionado = combo_ajuste.get()
+        if ajuste_seleccionado == "Sin ajuste":
+            tipo_ajuste = None
+            factor_q = None
+            incremento_h = None
+        elif ajuste_seleccionado == "Geométrico":
+            tipo_ajuste = "geometrica"
+            factor_q = float(entry_factor_q.get())
+            incremento_h = None
+        elif ajuste_seleccionado == "Aritmético":
+            tipo_ajuste = "aritmetica"
+            factor_q = None
+            incremento_h = float(entry_incremento_h.get())
+        else:
+            raise ValueError("Tipo de ajuste no válido seleccionado.")
+
         # Generar la tabla generacional
         tabla_generacion = tabla_gen(g, nombre_tabla)
 
         # Calcular la renta
-        sumatorio, valor_renta = renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes, tabla_generacion)
-        resultado_label.config(text=f"Valor actual actuarial: {sumatorio:.2f}\nValor de la renta actuarial: {valor_renta:.2f}")
+        resultado = renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes, tabla_generacion, tipo_ajuste, factor_q, incremento_h)
+        print("Resultado de renta:", resultado)  # Depuración
+        if len(resultado) != 3:
+            raise ValueError(f"La función renta devolvió {len(resultado)} valores, pero se esperaban 3 (sumatorio, valor_renta, tabla_flujos).")
+        sumatorio, valor_renta, tabla_flujos = resultado
+        resultado_label.config(text=f"Valor actual actuarial unitario: {sumatorio:.6f}\nValor actual actuarial: {valor_renta:.2f}")
+
+        # Mostrar la tabla
+        mostrar_tabla(tabla_flujos, tree)
+
     except Exception as e:
         resultado_label.config(text=f"Error: {str(e)}", fg="red")
 
 # Crear la ventana principal
 root = tk.Tk()
 root.title("Jupama Actuarial Software")
-root.geometry("600x700")  # Tamaño de la ventana
-root.configure(bg="#f0f4f8")  # Fondo gris claro
+root.geometry("1000x800")
+root.configure(bg="#f0f4f8")
 
 # Estilo para los widgets
 style = ttk.Style()
@@ -82,11 +137,11 @@ subtitle_label = tk.Label(
 )
 subtitle_label.pack()
 
-# Frame principal para las entradas
+# Frame principal para las entradas y la tabla
 main_frame = tk.Frame(root, bg="#f0f4f8", padx=20, pady=20)
 main_frame.pack(fill="both", expand=True)
 
-# Frame para las entradas (sección de datos)
+# Frame para las entradas (izquierda)
 input_frame = tk.LabelFrame(
     main_frame,
     text="Datos de Entrada",
@@ -96,7 +151,7 @@ input_frame = tk.LabelFrame(
     padx=15,
     pady=15
 )
-input_frame.pack(fill="x", pady=10)
+input_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
 
 # Año de nacimiento
 tk.Label(input_frame, text="Año de nacimiento:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=0, column=0, padx=5, pady=5, sticky="e")
@@ -151,9 +206,56 @@ tk.Label(input_frame, text="Diferimiento en años (dejar vacío si no hay):", bg
 entry_diferimiento = ttk.Entry(input_frame)
 entry_diferimiento.grid(row=8, column=1, padx=5, pady=5, sticky="w")
 
+# Tipo de ajuste
+tk.Label(input_frame, text="Tipo de ajuste:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=9, column=0, padx=5, pady=5, sticky="e")
+combo_ajuste = ttk.Combobox(input_frame, values=["Sin ajuste", "Geométrico", "Aritmético"], state="readonly")
+combo_ajuste.grid(row=9, column=1, padx=5, pady=5, sticky="w")
+
+# Factor q (para ajuste geométrico)
+tk.Label(input_frame, text="Factor q (geométrico, ej. 1.03):", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=10, column=0, padx=5, pady=5, sticky="e")
+entry_factor_q = ttk.Entry(input_frame)
+entry_factor_q.grid(row=10, column=1, padx=5, pady=5, sticky="w")
+
+# Incremento h (para ajuste aritmético)
+tk.Label(input_frame, text="Incremento h (aritmético, ej. 100):", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=11, column=0, padx=5, pady=5, sticky="e")
+entry_incremento_h = ttk.Entry(input_frame)
+entry_incremento_h.grid(row=11, column=1, padx=5, pady=5, sticky="w")
+
+# Frame para la tabla (derecha)
+table_frame = tk.LabelFrame(
+    main_frame,
+    text="Flujos Probables de Pago",
+    font=("Helvetica", 14, "bold"),
+    bg="#f0f4f8",
+    fg="#2c3e50",
+    padx=15,
+    pady=15
+)
+table_frame.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+
+# Configurar el Treeview para la tabla
+columns = ('k', 'v^k', 'k p_x', 'v^k * k p_x', 'FP')
+tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=14)
+tree.heading('k', text='k')
+tree.heading('v^k', text='v^k')
+tree.heading('k p_x', text='k p_x')
+tree.heading('v^k * k p_x', text='v^k * k p_x')
+tree.heading('FP', text='C * v^k * k p_x (FP)')
+tree.column('k', width=50, anchor='center')
+tree.column('v^k', width=100, anchor='center')
+tree.column('k p_x', width=100, anchor='center')
+tree.column('v^k * k p_x', width=100, anchor='center')
+tree.column('FP', width=100, anchor='center')
+
+# Añadir barra de desplazamiento
+scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=tree.yview)
+tree.configure(yscroll=scrollbar.set)
+scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+tree.pack(fill=tk.BOTH, expand=True)
+
 # Frame para el botón de cálculo
 button_frame = tk.Frame(main_frame, bg="#f0f4f8")
-button_frame.pack(pady=10)
+button_frame.grid(row=1, column=0, columnspan=2, pady=10)
 
 # Botón para calcular
 calcular_button = ttk.Button(button_frame, text="Calcular", command=calcular, style="Accent.TButton")
@@ -170,7 +272,7 @@ result_frame = tk.LabelFrame(
     padx=15,
     pady=15
 )
-result_frame.pack(fill="x", pady=10)
+result_frame.grid(row=2, column=0, columnspan=2, sticky="nsew")
 
 # Etiqueta para mostrar el resultado
 resultado_label = tk.Label(
@@ -195,6 +297,11 @@ footer_label = tk.Label(
     bg="#2c3e50"
 )
 footer_label.pack()
+
+# Configurar el grid para que se expanda correctamente
+main_frame.grid_columnconfigure(0, weight=1)
+main_frame.grid_columnconfigure(1, weight=1)
+main_frame.grid_rowconfigure(0, weight=1)
 
 # Iniciar la aplicación
 root.mainloop()
