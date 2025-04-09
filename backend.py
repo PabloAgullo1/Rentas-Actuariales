@@ -383,3 +383,5 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes, 
     tabla_flujos['k'] = tabla_flujos['k'].astype(int)
     print("Valores devueltos por renta:", sumatorio, sumatorio * capital, tabla_flujos)  # Depuración
     return sumatorio, sumatorio * capital, tabla_flujos
+
+    #Hola
