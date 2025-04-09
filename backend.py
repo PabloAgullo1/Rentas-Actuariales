@@ -251,6 +251,7 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes, 
             - valor_renta: Valor actual actuarial (sumatorio * capital).
             - tabla_flujos: DataFrame con columnas 'k', 'v^k', 'k p_x', 'v^k * k p_x', 'C * v^k * k p_x'.
     """
+    print("Ejecutando función renta...")  # Depuración
     tipo_renta = tipo_renta.lower()
     if tipo_renta not in ["prepagable", "pospagable"]:
         raise ValueError("El tipo de renta debe ser 'prepagable' o 'pospagable'")
@@ -383,5 +384,3 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes, 
     tabla_flujos['k'] = tabla_flujos['k'].astype(int)
     print("Valores devueltos por renta:", sumatorio, sumatorio * capital, tabla_flujos)  # Depuración
     return sumatorio, sumatorio * capital, tabla_flujos
-
-    #Hola
