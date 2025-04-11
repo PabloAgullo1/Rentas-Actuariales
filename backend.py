@@ -152,7 +152,7 @@ def interpolar_lx_mensual(tabla_anual, edad_inicio):
 
 def funcion_intereses(duracion, intereses, saltos):
 # devuelve una lista con los intereses del periodo, introduciendo como parametros lista de intereses y lista de saltos
-# ej: funcion_intereses(6, intereses=[0.2,0.4,0.5] saltos = [2,5,6]) ---> [0.2, 0.2, 0.4, 0.4, 0.4, 0.5]
+# ej: funcion_intereses(6, intereses=[0.2,0.4,0.5] saltos = [2,5,6]) ---> [0, 0.2, 0.2, 0.4, 0.4, 0.4, 0.5]
 
     def tipos_interes(args):
         return list(args)
