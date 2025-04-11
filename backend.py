@@ -150,11 +150,49 @@ def interpolar_lx_mensual(tabla_anual, edad_inicio):
 
     return pd.DataFrame(resultados)    
 
-def v(i, n):
+def funcion_intereses(duracion, intereses, saltos):
+# devuelve una lista con los intereses del periodo, introduciendo como parametros lista de intereses y lista de saltos
+# ej: funcion_intereses(6, intereses=[0.2,0.4,0.5] saltos = [2,5,6]) ---> [0.2, 0.2, 0.4, 0.4, 0.4, 0.5]
+
+    def tipos_interes(args):
+        return list(args)
+
+    def saltos_tiempo(args):
+        return list(args)
+
+    lista_intereses = tipos_interes(intereses)
+    lista_saltos = saltos_tiempo(saltos)
+
+    if lista_saltos[-1] < duracion:
+        raise ValueError("Faltan años por determinar")
+
+    total_intereses = []
+
+    # Creamos la lista de intereses según los saltos
+    inicio = 0
+    for i in range(len(lista_intereses)):
+        fin = lista_saltos[i]
+        interes = lista_intereses[i]
+        total_intereses.extend([interes] * (fin - inicio))
+        inicio = fin
+    total_intereses.insert(0, 0)
+
+    return total_intereses
+
+
+
+def v(i,  n, duracion, salto = None):
     """
     Calcula el factor de descuento para una tasa de interés i y un período n.
     """
-    return (1 + i) ** (-n)
+    if salto == None:
+        return (1 + i) ** (-n)
+    
+    else:
+        lista_intereses = funcion_intereses(duracion, intereses = [i], saltos = [salto])
+
+        return (1 + lista_intereses[n])**(-n)
+
 
 def tpx(x, t=1, tabla_generacion=None):
     """
