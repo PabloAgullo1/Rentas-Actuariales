@@ -150,46 +150,39 @@ def interpolar_lx_mensual(tabla_anual, edad_inicio):
 
     return pd.DataFrame(resultados)    
 
-def funcion_intereses(duracion, intereses, saltos):
+def funcion_intereses(intereses, saltos, edad_renta, tabla_generacion, duracion = None,):
 # devuelve una lista con los intereses del periodo, introduciendo como parametros lista de intereses y lista de saltos
-# ej: funcion_intereses(6, intereses=[0.2,0.4,0.5] saltos = [2,5,6]) ---> [0, 0.2, 0.2, 0.4, 0.4, 0.4, 0.5]
-
-    def tipos_interes(args):
-        return list(args)
-
-    def saltos_tiempo(args):
-        return list(args)
-
-    lista_intereses = tipos_interes(intereses)
-    lista_saltos = saltos_tiempo(saltos)
-
-    if lista_saltos[-1] < duracion:
+# ej: funcion_intereses(6, [0.2,0.4,0.5], [2,5,6]) ---> [0, 0.2, 0.2, 0.4, 0.4, 0.4, 0.5]
+    if duracion == None:
+        duracion = int(tabla_generacion["x+t"].iloc[-1]) - edad_renta 
+    
+    if saltos[-1] < duracion:
         raise ValueError("Faltan años por determinar")
 
     total_intereses = []
 
     # Creamos la lista de intereses según los saltos
     inicio = 0
-    for i in range(len(lista_intereses)):
-        fin = lista_saltos[i]
-        interes = lista_intereses[i]
+    for i in range(len(intereses)):
+        fin = saltos[i]
+        interes = intereses[i]
         total_intereses.extend([interes] * (fin - inicio))
         inicio = fin
-    total_intereses.insert(0, 0)
+    total_intereses.insert(0, 0) 
 
     return total_intereses
 
 
 
-def v(i,  n, duracion, salto = None):
+def v(i,  n, edad_renta, tabla_generacion, duracion = None, saltos = None):
     """
     Calcula el factor de descuento para una tasa de interés i y un período n.
     """
-    if salto == None:
+    if saltos == None:
         return (1 + i) ** (-n)
     
     else:
-        lista_intereses = funcion_intereses(duracion, intereses = [i], saltos = [salto])
+        lista_intereses = funcion_intereses([i], [saltos],edad_renta, tabla_generacion, duracion )
 
         return (1 + lista_intereses[n])**(-n)
 
@@ -306,7 +299,7 @@ def aritmetica(capital, tipo_renta, k, h, diferimiento=None):
     return cap
 
 def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes,
-          tabla_generacion, tipo_ajuste=None, factor_q=None, incremento_h=None):
+          tabla_generacion, tipo_ajuste=None, factor_q=None, incremento_h=None, salto = None):
     """
     Calcula el valor actual actuarial y el valor de la renta actuarial, con ajuste geométrico o aritmético.
     También genera una tabla con los flujos probables de pago.
@@ -349,7 +342,7 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes,
             if temporalidad is None:  # Renta vitalicia
                 for i in range(w_menosx):
                     val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i)
+                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
                     if tipo_ajuste == "geometrica":
                         cap_ajustado = capital * geometrica(tipo_renta, i, factor_q)
                     elif tipo_ajuste == "aritmetica":
@@ -362,7 +355,7 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes,
             else:  # Renta temporal
                 for i in range(int(temporalidad)):
                     val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i)
+                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
                     if tipo_ajuste == "geometrica":
                         cap_ajustado = capital * geometrica(tipo_renta, i, factor_q)
                     elif tipo_ajuste == "aritmetica":
@@ -377,7 +370,7 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes,
             if temporalidad is None:  # Vitalicia
                 for i in range(diferimiento, w_menosx):
                     val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i)
+                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
                     if tipo_ajuste == "geometrica":
                         cap_ajustado = capital * geometrica(tipo_renta, i, factor_q, diferimiento)
                     elif tipo_ajuste == "aritmetica":
@@ -390,7 +383,7 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes,
             else:  # Temporal
                 for i in range(diferimiento, int(temporalidad) + diferimiento):
                     val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i)
+                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
                     if tipo_ajuste == "geometrica":
                         cap_ajustado = capital * geometrica(tipo_renta, i, factor_q, diferimiento)
                     elif tipo_ajuste == "aritmetica":
@@ -406,7 +399,7 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes,
             if temporalidad is None:  # Vitalicia
                 for i in range(1, w_menosx):
                     val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i)
+                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
                     if tipo_ajuste == "geometrica":
                         cap_ajustado = capital * geometrica(tipo_renta, i, factor_q)
                     elif tipo_ajuste == "aritmetica":
@@ -419,7 +412,7 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes,
             else:  # Temporal
                 for i in range(1, int(temporalidad) + 1):
                     val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i)
+                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
                     if tipo_ajuste == "geometrica":
                         cap_ajustado = capital * geometrica(tipo_renta, i, factor_q)
                     elif tipo_ajuste == "aritmetica":
@@ -434,7 +427,7 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes,
             if temporalidad is None:  # Vitalicia
                 for i in range(diferimiento + 1, w_menosx):
                     val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i)
+                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
                     if tipo_ajuste == "geometrica":
                         cap_ajustado = capital * geometrica(tipo_renta, i, factor_q, diferimiento)
                     elif tipo_ajuste == "aritmetica":
@@ -447,7 +440,7 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes,
             else:  # Temporal
                 for i in range(diferimiento + 1, int(temporalidad) + diferimiento + 1):
                     val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i)
+                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
                     if tipo_ajuste == "geometrica":
                         cap_ajustado = capital * geometrica(tipo_renta, i, factor_q, diferimiento)
                     elif tipo_ajuste == "aritmetica":
