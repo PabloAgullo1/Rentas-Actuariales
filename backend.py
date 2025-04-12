@@ -154,7 +154,7 @@ def funcion_intereses(intereses, saltos, edad_renta, tabla_generacion, duracion 
 # devuelve una lista con los intereses del periodo, introduciendo como parametros lista de intereses y lista de saltos
 # ej: funcion_intereses(6, [0.2,0.4,0.5], [2,5,6]) ---> [0, 0.2, 0.2, 0.4, 0.4, 0.4, 0.5]
     if duracion == None:
-        duracion = int(tabla_generacion["x+t"].iloc[-1]) - edad_renta 
+        duracion = int(tabla_generacion["x+t"].iloc[-1]) - edad_renta  - 1
     
     if saltos[-1] < duracion:
         raise ValueError("Faltan años por determinar")
