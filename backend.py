@@ -97,7 +97,7 @@ def tabla_gen(g, nombre_tabla):
     df.index.name = 'edad'
 
     # Generar la tabla generacional
-    x_mas_t_list = list(range(edad_inicio, len(df))) 
+    x_mas_t_list = list(range(edad_inicio, len(df) + 1)) 
     edad_t = list(range(0, len(x_mas_t_list)))
 
     resultados = pd.DataFrame(columns=['Edad', 'x+t'])
@@ -121,33 +121,6 @@ def tabla_gen(g, nombre_tabla):
              
     return resultados
 
-def interpolar_lx_mensual(tabla_anual, edad_inicio):
-    """
-    Interpola los valores de lx mensualmente a partir de la tabla anual.
-
-    Args:
-        tabla_anual (pd.DataFrame): Tabla generacional anual con columnas 'x+t', 'lx'.
-        edad_inicio (int): Edad base desde la cual queremos interpolar.
-
-    Returns:
-        pd.DataFrame: Tabla con columnas k, j, l_{x+k+j/12}
-    """
-    resultados = []
-
-    for j in range(12):  # j = 0 a 11 (meses)
-        edad_entera = edad_inicio
-        fraccion = j / 12
-
-        # lx en la edad k y k+1
-        lx_k = tabla_anual.loc[tabla_anual['x+t'] == edad_entera, 'lx'].values[0]
-        lx_k1 = tabla_anual.loc[tabla_anual['x+t'] == edad_entera + 1, 'lx'].values[0]
-
-        # Interpolación lineal mensual
-        lx_interp = lx_k - (lx_k1 - lx_k) * fraccion
-
-        resultados.append({'k': edad_inicio, 'j': j, 'l_{x+k+j/12}': round(lx_interp, 2)})
-
-    return pd.DataFrame(resultados)
 
 def interpolar_lx_fraccionada_completa(tabla_anual, edad_inicio, duracion, fracciones_por_anio=12):
     """
