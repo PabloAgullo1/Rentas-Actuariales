@@ -2,9 +2,7 @@
 import tkinter as tk
 from tkinter import ttk
 import pandas as pd
-import backend  # Importamos el módulo backend
-print("Ruta del módulo backend:", backend.__file__)  # Imprime la ruta del archivo backend.py que se está usando
-from backend import tabla_gen, renta
+from backend import funcion_intereses, tabla_gen, renta
 
 # Función para limpiar la tabla anterior
 def limpiar_tabla(tree):
@@ -15,23 +13,43 @@ def limpiar_tabla(tree):
 def mostrar_tabla(tabla_flujos, tree):
     limpiar_tabla(tree)
     
-    # Mostrar las primeras 7 filas y las últimas 7 filas
-    total_filas = len(tabla_flujos)
-    if total_filas <= 14:
-        filas_mostrar = tabla_flujos
-    else:
-        primeras_filas = tabla_flujos.iloc[:7]
-        ultimas_filas = tabla_flujos.iloc[-7:]
-        filas_mostrar = pd.concat([primeras_filas, ultimas_filas])
-
-    for index, row in filas_mostrar.iterrows():
+    # Mostrar todas las filas de la tabla
+    for index, row in tabla_flujos.iterrows():
         tree.insert("", tk.END, values=(
-            int(row['k']),
+            f"{row['k']:.2f}",  # Mostrar k con 2 decimales (años fraccionarios)
             f"{row['v^k']:.6f}",
             f"{row['k p_x']:.6f}",
             f"{row['v^k * k p_x']:.6f}",
-            f"{row['C * v^k * k p_x']:.2f}"
+            f"{row['C * k p_x']:.6f}"
         ))
+
+# Funciones para mostrar/ocultar campos de tasas de interés
+def actualizar_campos_interes(*args):
+    seleccion = combo_tipo_interes.get()
+    if seleccion == "Fija":
+        label_interes_fijo.grid()
+        entry_interes_fijo.grid()
+        label_intereses.grid_remove()
+        entry_intereses.grid_remove()
+        label_saltos.grid_remove()
+        entry_saltos.grid_remove()
+    elif seleccion == "Variable":
+        label_interes_fijo.grid_remove()
+        entry_interes_fijo.grid_remove()
+        label_intereses.grid()
+        entry_intereses.grid()
+        label_saltos.grid()
+        entry_saltos.grid()
+
+# Funciones para mostrar/ocultar campos de fracciones
+def actualizar_campos_fracciones(*args):
+    seleccion = combo_periodicidad.get()
+    if seleccion == "Anual":
+        label_fracciones.grid_remove()
+        entry_fracciones.grid_remove()
+    elif seleccion == "Fraccionada":
+        label_fracciones.grid()
+        entry_fracciones.grid()
 
 # Función principal de cálculo
 def calcular():
@@ -42,15 +60,10 @@ def calcular():
         if not nombre_tabla:
             raise ValueError("Debe seleccionar una tabla de mortalidad.")
         
-        interes = float(entry_interes.get()) / 100
-        tipo_renta = combo_tipo_renta.get()
-        if not tipo_renta:
-            raise ValueError("Debe seleccionar un tipo de renta (prepagable/pospagable).")
-        
+        # Edad al momento de contratación (necesaria para funcion_intereses si se usa)
         edad_renta = int(entry_edad_renta.get())
-        capital = float(entry_capital.get())
-        
-        # Temporalidad
+
+        # Temporalidad (necesaria para funcion_intereses si se usa)
         temporalidad = combo_temporalidad.get()
         if temporalidad == "Vitalicia":
             temporalidad = None
@@ -59,12 +72,69 @@ def calcular():
         else:
             raise ValueError("Debe seleccionar si la renta es vitalicia o temporal.")
         
+        # Generar la tabla generacional (necesaria para funcion_intereses si se usa)
+        tabla_generacion = tabla_gen(g, nombre_tabla)
+
+        # Determinar si la tasa es fija o variable
+        tipo_interes = combo_tipo_interes.get()
+        interes = None
+        lista_intereses = None
+        if tipo_interes == "Fija":
+            interes_str = entry_interes_fijo.get()
+            if not interes_str:
+                raise ValueError("Debe ingresar una tasa de interés fija.")
+            try:
+                interes = float(interes_str.strip()) / 100  # Convertir porcentaje a decimal
+            except ValueError:
+                raise ValueError("La tasa de interés fija debe ser un número válido (ej. 3 para 3%).")
+        elif tipo_interes == "Variable":
+            intereses_str = entry_intereses.get()
+            saltos_str = entry_saltos.get()
+            if not intereses_str or not saltos_str:
+                raise ValueError("Debe ingresar las tasas de interés y los años de cambio.")
+            try:
+                intereses = [float(i.strip()) / 100 for i in intereses_str.split(",")]
+                saltos = [int(s.strip()) for s in saltos_str.split(",")]
+            except ValueError:
+                raise ValueError("Las tasas de interés y los años de cambio deben ser números válidos (ej. 2, 4, 5 y 2, 5, 6).")
+
+            # Validar que las listas tengan la misma longitud
+            if len(intereses) != len(saltos):
+                raise ValueError("El número de tasas de interés debe coincidir con el número de años de cambio.")
+
+            # Generar la lista de tasas de interés usando funcion_intereses
+            lista_intereses = funcion_intereses(intereses, saltos, edad_renta, tabla_generacion, temporalidad)
+
+        # Tipo de renta
+        tipo_renta = combo_tipo_renta.get()
+        if not tipo_renta:
+            raise ValueError("Debe seleccionar un tipo de renta (prepagable/pospagable).")
+        
+        capital = float(entry_capital.get())
+        
         # Diferimiento
         diferimiento = entry_diferimiento.get()
         if diferimiento == "":
             diferimiento = None
         else:
             diferimiento = int(diferimiento)
+
+        # Periodicidad (Anual o Fraccionada)
+        periodicidad = combo_periodicidad.get()
+        if periodicidad == "Anual":
+            fracciones_por_anio = 1
+        elif periodicidad == "Fraccionada":
+            fracciones_str = entry_fracciones.get()
+            if not fracciones_str:
+                raise ValueError("Debe ingresar el número de fracciones por año.")
+            try:
+                fracciones_por_anio = int(fracciones_str.strip())
+                if fracciones_por_anio <= 0:
+                    raise ValueError("El número de fracciones por año debe ser mayor que 0.")
+            except ValueError:
+                raise ValueError("El número de fracciones por año debe ser un número entero válido (ej. 12 para mensual).")
+        else:
+            raise ValueError("Debe seleccionar la periodicidad de la renta (Anual o Fraccionada).")
 
         # Tipo de ajuste
         ajuste_seleccionado = combo_ajuste.get()
@@ -83,11 +153,8 @@ def calcular():
         else:
             raise ValueError("Tipo de ajuste no válido seleccionado.")
 
-        # Generar la tabla generacional
-        tabla_generacion = tabla_gen(g, nombre_tabla)
-
         # Calcular la renta
-        resultado = renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes, tabla_generacion, tipo_ajuste, factor_q, incremento_h)
+        resultado = renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, lista_intereses=lista_intereses, interes=interes, tabla_generacion=tabla_generacion, tipo_ajuste=tipo_ajuste, factor_q=factor_q, incremento_h=incremento_h, fracciones_por_anio=fracciones_por_anio)
         print("Resultado de renta:", resultado)  # Depuración
         if len(resultado) != 3:
             raise ValueError(f"La función renta devolvió {len(resultado)} valores, pero se esperaban 3 (sumatorio, valor_renta, tabla_flujos).")
@@ -171,55 +238,92 @@ combo_tabla = ttk.Combobox(
 )
 combo_tabla.grid(row=1, column=1, padx=5, pady=5, sticky="w")
 
-# Tasa de interés
-tk.Label(input_frame, text="Tasa de interés (%):", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=2, column=0, padx=5, pady=5, sticky="e")
-entry_interes = ttk.Entry(input_frame)
-entry_interes.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+# Tipo de tasa de interés (Fija o Variable)
+tk.Label(input_frame, text="Tipo de tasa de interés:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=2, column=0, padx=5, pady=5, sticky="e")
+combo_tipo_interes = ttk.Combobox(input_frame, values=["Fija", "Variable"], state="readonly")
+combo_tipo_interes.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+combo_tipo_interes.set("Fija")  # Valor por defecto
+combo_tipo_interes.bind("<<ComboboxSelected>>", actualizar_campos_interes)
+
+# Tasa de interés fija
+label_interes_fijo = tk.Label(input_frame, text="Tasa de interés fija (%, ej. 3):", bg="#f0f4f8", font=("Helvetica", 11))
+label_interes_fijo.grid(row=3, column=0, padx=5, pady=5, sticky="e")
+entry_interes_fijo = ttk.Entry(input_frame)
+entry_interes_fijo.grid(row=3, column=1, padx=5, pady=5, sticky="w")
+
+# Tasas de interés variables (separadas por comas, ej. 2, 4, 5)
+label_intereses = tk.Label(input_frame, text="Tasas de interés (%, ej. 2, 4, 5):", bg="#f0f4f8", font=("Helvetica", 11))
+label_intereses.grid(row=4, column=0, padx=5, pady=5, sticky="e")
+entry_intereses = ttk.Entry(input_frame)
+entry_intereses.grid(row=4, column=1, padx=5, pady=5, sticky="w")
+
+# Años de cambio (saltos, separados por comas, ej. 2, 5, 6)
+label_saltos = tk.Label(input_frame, text="Años de cambio (ej. 2, 5, 6):", bg="#f0f4f8", font=("Helvetica", 11))
+label_saltos.grid(row=5, column=0, padx=5, pady=5, sticky="e")
+entry_saltos = ttk.Entry(input_frame)
+entry_saltos.grid(row=5, column=1, padx=5, pady=5, sticky="w")
 
 # Tipo de renta
-tk.Label(input_frame, text="Tipo de renta:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=3, column=0, padx=5, pady=5, sticky="e")
+tk.Label(input_frame, text="Tipo de renta:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=6, column=0, padx=5, pady=5, sticky="e")
 combo_tipo_renta = ttk.Combobox(input_frame, values=["prepagable", "pospagable"], state="readonly")
-combo_tipo_renta.grid(row=3, column=1, padx=5, pady=5, sticky="w")
+combo_tipo_renta.grid(row=6, column=1, padx=5, pady=5, sticky="w")
 
 # Edad al momento de contratación
-tk.Label(input_frame, text="Edad al momento de contratación:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=4, column=0, padx=5, pady=5, sticky="e")
+tk.Label(input_frame, text="Edad al momento de contratación:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=7, column=0, padx=5, pady=5, sticky="e")
 entry_edad_renta = ttk.Entry(input_frame)
-entry_edad_renta.grid(row=4, column=1, padx=5, pady=5, sticky="w")
+entry_edad_renta.grid(row=7, column=1, padx=5, pady=5, sticky="w")
 
 # Capital a asegurar
-tk.Label(input_frame, text="Capital a asegurar:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=5, column=0, padx=5, pady=5, sticky="e")
+tk.Label(input_frame, text="Capital a asegurar:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=8, column=0, padx=5, pady=5, sticky="e")
 entry_capital = ttk.Entry(input_frame)
-entry_capital.grid(row=5, column=1, padx=5, pady=5, sticky="w")
+entry_capital.grid(row=8, column=1, padx=5, pady=5, sticky="w")
 
 # Temporalidad (vitalicia o temporal)
-tk.Label(input_frame, text="Temporalidad:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=6, column=0, padx=5, pady=5, sticky="e")
+tk.Label(input_frame, text="Temporalidad:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=9, column=0, padx=5, pady=5, sticky="e")
 combo_temporalidad = ttk.Combobox(input_frame, values=["Vitalicia", "Temporal"], state="readonly")
-combo_temporalidad.grid(row=6, column=1, padx=5, pady=5, sticky="w")
+combo_temporalidad.grid(row=9, column=1, padx=5, pady=5, sticky="w")
 
 # Duración (si es temporal)
-tk.Label(input_frame, text="Duración (si temporal):", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=7, column=0, padx=5, pady=5, sticky="e")
+tk.Label(input_frame, text="Duración (si temporal):", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=10, column=0, padx=5, pady=5, sticky="e")
 entry_duracion = ttk.Entry(input_frame)
-entry_duracion.grid(row=7, column=1, padx=5, pady=5, sticky="w")
+entry_duracion.grid(row=10, column=1, padx=5, pady=5, sticky="w")
 
 # Diferimiento
-tk.Label(input_frame, text="Diferimiento en años (dejar vacío si no hay):", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=8, column=0, padx=5, pady=5, sticky="e")
+tk.Label(input_frame, text="Diferimiento en años (dejar vacío si no hay):", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=11, column=0, padx=5, pady=5, sticky="e")
 entry_diferimiento = ttk.Entry(input_frame)
-entry_diferimiento.grid(row=8, column=1, padx=5, pady=5, sticky="w")
+entry_diferimiento.grid(row=11, column=1, padx=5, pady=5, sticky="w")
+
+# Periodicidad (Anual o Fraccionada)
+tk.Label(input_frame, text="Periodicidad de la renta:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=12, column=0, padx=5, pady=5, sticky="e")
+combo_periodicidad = ttk.Combobox(input_frame, values=["Anual", "Fraccionada"], state="readonly")
+combo_periodicidad.grid(row=12, column=1, padx=5, pady=5, sticky="w")
+combo_periodicidad.set("Anual")  # Valor por defecto
+combo_periodicidad.bind("<<ComboboxSelected>>", actualizar_campos_fracciones)
+
+# Número de fracciones por año (si es fraccionada)
+label_fracciones = tk.Label(input_frame, text="Fracciones por año (ej. 12 para mensual):", bg="#f0f4f8", font=("Helvetica", 11))
+label_fracciones.grid(row=13, column=0, padx=5, pady=5, sticky="e")
+entry_fracciones = ttk.Entry(input_frame)
+entry_fracciones.grid(row=13, column=1, padx=5, pady=5, sticky="w")
 
 # Tipo de ajuste
-tk.Label(input_frame, text="Tipo de ajuste:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=9, column=0, padx=5, pady=5, sticky="e")
+tk.Label(input_frame, text="Tipo de ajuste:", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=14, column=0, padx=5, pady=5, sticky="e")
 combo_ajuste = ttk.Combobox(input_frame, values=["Sin ajuste", "Geométrico", "Aritmético"], state="readonly")
-combo_ajuste.grid(row=9, column=1, padx=5, pady=5, sticky="w")
+combo_ajuste.grid(row=14, column=1, padx=5, pady=5, sticky="w")
 
 # Factor q (para ajuste geométrico)
-tk.Label(input_frame, text="Factor q (geométrico, ej. 1.03):", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=10, column=0, padx=5, pady=5, sticky="e")
+tk.Label(input_frame, text="Factor q (geométrico, ej. 1.03):", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=15, column=0, padx=5, pady=5, sticky="e")
 entry_factor_q = ttk.Entry(input_frame)
-entry_factor_q.grid(row=10, column=1, padx=5, pady=5, sticky="w")
+entry_factor_q.grid(row=15, column=1, padx=5, pady=5, sticky="w")
 
 # Incremento h (para ajuste aritmético)
-tk.Label(input_frame, text="Incremento h (aritmético, ej. 100):", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=11, column=0, padx=5, pady=5, sticky="e")
+tk.Label(input_frame, text="Incremento h (aritmético, ej. 100):", bg="#f0f4f8", font=("Helvetica", 11)).grid(row=16, column=0, padx=5, pady=5, sticky="e")
 entry_incremento_h = ttk.Entry(input_frame)
-entry_incremento_h.grid(row=11, column=1, padx=5, pady=5, sticky="w")
+entry_incremento_h.grid(row=16, column=1, padx=5, pady=5, sticky="w")
+
+# Inicializar visibilidad de los campos
+actualizar_campos_interes()
+actualizar_campos_fracciones()
 
 # Frame para la tabla (derecha)
 table_frame = tk.LabelFrame(
@@ -235,12 +339,12 @@ table_frame.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
 
 # Configurar el Treeview para la tabla
 columns = ('k', 'v^k', 'k p_x', 'v^k * k p_x', 'FP')
-tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=14)
+tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=20)
 tree.heading('k', text='k')
 tree.heading('v^k', text='v^k')
 tree.heading('k p_x', text='k p_x')
 tree.heading('v^k * k p_x', text='v^k * k p_x')
-tree.heading('FP', text='C * v^k * k p_x (FP)')
+tree.heading('FP', text='C * k p_x (FP)')
 tree.column('k', width=50, anchor='center')
 tree.column('v^k', width=100, anchor='center')
 tree.column('k p_x', width=100, anchor='center')

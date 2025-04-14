@@ -58,11 +58,10 @@ def tabla_gen(g, nombre_tabla):
     Args:
         g (int): Año de nacimiento.
         nombre_tabla (str): Nombre de la tabla de mortalidad.
-        periodo (str): Periodo de cálculo ('anual' o 'mensual').
     
     Returns:
         pd.DataFrame: Tabla generacional con columnas:
-            - Anual: 'x+t', 'qx+t ajustado', 'lx', 'dx.
+            - Anual: 'x+t', 'qx+t ajustado', 'lx', 'dx'.
     """
     # Obtener el año base
     anio_base = generacion(g, nombre_tabla)
@@ -128,7 +127,7 @@ def interpolar_lx_mensual(tabla_anual, edad_inicio):
 
     Args:
         tabla_anual (pd.DataFrame): Tabla generacional anual con columnas 'x+t', 'lx'.
-        k (int): Edad base desde la cual queremos interpolar.
+        edad_inicio (int): Edad base desde la cual queremos interpolar.
 
     Returns:
         pd.DataFrame: Tabla con columnas k, j, l_{x+k+j/12}
@@ -146,22 +145,52 @@ def interpolar_lx_mensual(tabla_anual, edad_inicio):
         # Interpolación lineal mensual
         lx_interp = lx_k - (lx_k1 - lx_k) * fraccion
 
-        resultados.append({'k': k, 'j': j, 'l_{x+k+j/12}': round(lx_interp, 2)})
+        resultados.append({'k': edad_inicio, 'j': j, 'l_{x+k+j/12}': round(lx_interp, 2)})
 
-    return pd.DataFrame(resultados)    
+    return pd.DataFrame(resultados)
 
-def funcion_intereses(intereses, saltos, edad_renta, tabla_generacion, duracion = None,):
-# devuelve una lista con los intereses del periodo, introduciendo como parametros lista de intereses y lista de saltos
-# ej: funcion_intereses(6, [0.2,0.4,0.5], [2,5,6]) ---> [0, 0.2, 0.2, 0.4, 0.4, 0.4, 0.5]
-    if duracion == None:
-        duracion = int(tabla_generacion["x+t"].iloc[-1]) - edad_renta  - 1
+def interpolar_lx_fraccionada_completa(tabla_anual, edad_inicio, duracion, fracciones_por_anio=12):
+    """
+    Interpola los valores de lx en fracciones (mensuales, trimestrales, etc.) para todas las edades necesarias.
+    
+    Args:
+        tabla_anual (pd.DataFrame): Tabla generacional anual con columnas 'x+t', 'lx'.
+        edad_inicio (int): Edad base desde la cual queremos interpolar.
+        duracion (int): Número de años a interpolar.
+        fracciones_por_anio (int): Número de fracciones por año (1 para anual, 12 para mensual, etc.).
+    
+    Returns:
+        pd.DataFrame: Tabla con columnas k, j, l_{x+k+j/fracciones}
+    """
+    resultados = []
+    for k_offset in range(duracion + 1):  # Incluye el último año
+        edad = edad_inicio + k_offset
+        if edad + 1 not in tabla_anual['x+t'].values:
+            break  # Si no hay datos para la siguiente edad, detener
+        for j in range(fracciones_por_anio):  # j = 0 a fracciones_por_anio-1
+            fraccion = j / fracciones_por_anio
+            # lx en la edad k y k+1
+            lx_k = tabla_anual.loc[tabla_anual['x+t'] == edad, 'lx'].values[0]
+            lx_k1 = tabla_anual.loc[tabla_anual['x+t'] == edad + 1, 'lx'].values[0]
+            # Interpolación lineal
+            lx_interp = lx_k - (lx_k1 - lx_k) * fraccion
+            resultados.append({'k': edad, 'j': j, 'l_{x+k+j/12}': round(lx_interp, 2)})
+    
+    return pd.DataFrame(resultados)
+
+def funcion_intereses(intereses, saltos, edad_renta, tabla_generacion, duracion=None):
+    """
+    Devuelve una lista con los intereses del periodo, introduciendo como parámetros lista de intereses y lista de saltos.
+    Ejemplo: funcion_intereses([0.02, 0.04, 0.05], [2, 5, 6], edad_renta, tabla_generacion, duracion=6)
+             ---> [0, 0.02, 0.02, 0.04, 0.04, 0.04, 0.05]
+    """
+    if duracion is None:
+        duracion = int(tabla_generacion["x+t"].iloc[-1]) - edad_renta - 1
     
     if saltos[-1] < duracion:
         raise ValueError("Faltan años por determinar")
 
     total_intereses = []
-
-    # Creamos la lista de intereses según los saltos
     inicio = 0
     for i in range(len(intereses)):
         fin = saltos[i]
@@ -172,29 +201,37 @@ def funcion_intereses(intereses, saltos, edad_renta, tabla_generacion, duracion 
 
     return total_intereses
 
-
-
-def v(i,  n, edad_renta, tabla_generacion, duracion = None, saltos = None):
+def v(lista_intereses, n):
     """
-    Calcula el factor de descuento para una tasa de interés i y un período n.
+    Calcula el factor de descuento para una lista de tasas de interés y un período n.
+    Args:
+        lista_intereses (list): Lista de tasas de interés por año (índice 0 es 0, índice 1 es año 1, etc.).
+        n (int): Número de años a descontar.
+    Returns:
+        float: Factor de descuento acumulado.
     """
-    if saltos == None:
-        return (1 + i) ** (-n)
-    
-    else:
-        lista_intereses = funcion_intereses([i], [saltos],edad_renta, tabla_generacion, duracion )
+    if n == 0:
+        return 1.0
+    producto = 1.0
+    for k in range(1, n + 1):
+        if k >= len(lista_intereses):
+            # Si n excede la longitud de la lista, usar la última tasa
+            i_k = lista_intereses[-1]
+        else:
+            i_k = lista_intereses[k]
+        producto *= (1 + i_k) ** (-1)
+    return producto
 
-        return (1 + lista_intereses[n])**(-n)
-
-
-def tpx(x, t=1, tabla_generacion=None):
+def tpx(x, t=1, tabla_generacion=None, fracciones_por_anio=12):
     """
     Calcula la probabilidad de que un individuo de edad x sobreviva t años más.
+    Trabaja con una tabla fraccionada interpolada.
     
     Args:
         x (int): Edad actual del individuo.
-        t (int): Número de años a sobrevivir (por defecto 1).
-        tabla_generacion (pd.DataFrame): Tabla generacional con columnas 'x+t' y 'lx'.
+        t (float): Tiempo a sobrevivir (en años, puede ser fraccionario).
+        tabla_generacion (pd.DataFrame): Tabla fraccionada con columnas 'k', 'j', 'l_{x+k+j/fracciones}'.
+        fracciones_por_anio (int): Número de fracciones por año (1 para anual, 12 para mensual, etc.).
     
     Returns:
         float: Probabilidad tpx.
@@ -205,35 +242,31 @@ def tpx(x, t=1, tabla_generacion=None):
     if tabla_generacion is None:
         raise ValueError("Se requiere una tabla generacional para calcular tpx.")
     
+    # Convertir t (en años) a fracciones
+    t_fracciones = int(t * fracciones_por_anio)  # t años * fracciones_por_anio
+    
+    # Buscar l_x (edad inicial) y l_{x+t} (edad final)
     l_x = None
     l_x_mas_t = None
     
-    for i in range(len(tabla_generacion["x+t"])):
-        if tabla_generacion["x+t"][i] == x:
-            l_x = tabla_generacion["lx"][i]
+    # Para x inicial (t=0, j=0)
+    for i in tabla_generacion.index:
+        if tabla_generacion.loc[i, 'k'] == x and tabla_generacion.loc[i, 'j'] == 0:
+            l_x = tabla_generacion.loc[i, 'l_{x+k+j/12}']
             break
     
-    for i in range(len(tabla_generacion["x+t"])):
-        if tabla_generacion["x+t"][i] == x + t:
-            l_x_mas_t = tabla_generacion["lx"][i]
+    # Para x+t (en fracciones)
+    fraccion_final = t_fracciones % fracciones_por_anio  # Fracción correspondiente (0 a fracciones_por_anio-1)
+    edad_final = x + (t_fracciones // fracciones_por_anio)  # Edad entera después de t años
+    for i in tabla_generacion.index:
+        if tabla_generacion.loc[i, 'k'] == edad_final and tabla_generacion.loc[i, 'j'] == fraccion_final:
+            l_x_mas_t = tabla_generacion.loc[i, 'l_{x+k+j/12}']
             break
     
     if l_x is None or l_x_mas_t is None:
         raise ValueError(f"Edad x={x} o x+t={x+t} no encontrada en la tabla de mortalidad")
     
     return l_x_mas_t / l_x
-
-def tqx(tpx_value):
-    """
-    Calcula la probabilidad de que un individuo no sobreviva (1 - tpx).
-    
-    Args:
-        tpx_value (float): Probabilidad tpx.
-    
-    Returns:
-        float: Probabilidad tqx.
-    """
-    return 1 - tpx_value
 
 def geometrica(tipo_renta, k, q, diferimiento=None):
     """
@@ -298,31 +331,11 @@ def aritmetica(capital, tipo_renta, k, h, diferimiento=None):
             cap = capital + (k - diferimiento - 1) * h
     return cap
 
-def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes,
-          tabla_generacion, tipo_ajuste=None, factor_q=None, incremento_h=None, salto = None):
-    """
-    Calcula el valor actual actuarial y el valor de la renta actuarial, con ajuste geométrico o aritmético.
-    También genera una tabla con los flujos probables de pago.
-    
-    Args:
-        tipo_renta (str): Tipo de renta ("prepagable" o "pospagable").
-        edad_renta (int): Edad al momento de contratación.
-        capital (float): Capital a asegurar.
-        temporalidad (int or None): Duración de la renta (None si es vitalicia).
-        diferimiento (int or None): Período de diferimiento (None si es inmediata).
-        interes (float): Tasa de interés (en decimal, ej. 0.03 para 3%).
-        tabla_generacion (pd.DataFrame): Tabla generacional con columnas 'x+t', 'lx'.
-        tipo_ajuste (str or None): Tipo de ajuste ("geometrica" o "aritmetica", None si no hay ajuste).
-        factor_q (float or None): Factor de crecimiento geométrico (para ajuste geométrico).
-        incremento_h (float or None): Incremento aritmético por período (para ajuste aritmético).
-    
-    Returns:
-        tuple: (sumatorio, valor_renta, tabla_flujos), donde:
-            - sumatorio: Valor actual actuarial unitario.
-            - valor_renta: Valor actual actuarial (sumatorio * capital).
-            - tabla_flujos: DataFrame con columnas 'k', 'v^k', 'k p_x', 'v^k * k p_x', 'C * v^k * k p_x'.
-    """
-    print("Ejecutando función renta...")  # Depuración
+def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, lista_intereses=None, interes=None,
+          tabla_generacion=None, tipo_ajuste=None, factor_q=None, incremento_h=None, fracciones_por_anio=12):
+   
+    import logging
+    logging.debug("Ejecutando función renta...")
     tipo_renta = tipo_renta.lower()
     if tipo_renta not in ["prepagable", "pospagable"]:
         raise ValueError("El tipo de renta debe ser 'prepagable' o 'pospagable'")
@@ -330,128 +343,166 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, interes,
     if tipo_ajuste not in [None, "geometrica", "aritmetica"]:
         raise ValueError("El tipo de ajuste debe ser 'geometrica', 'aritmetica' o None")
 
-    # Determinar la edad máxima (omega)
-    w_menosx = int(tabla_generacion["x+t"].iloc[-1]) - edad_renta
+    if tabla_generacion is None:
+        raise ValueError("Se requiere una tabla generacional para calcular la renta.")
+    
+    # Validar que se proporcione exactamente una de las opciones: interes o lista_intereses
+    if interes is None and lista_intereses is None:
+        raise ValueError("Se debe proporcionar una tasa de interés fija (interes) o una lista de tasas variables (lista_intereses).")
+    if interes is not None and lista_intereses is not None:
+        raise ValueError("Debe proporcionarse solo una de las siguientes opciones: interes o lista_intereses.")
+
+    # Determinar la duración máxima en fracciones
+    if temporalidad is None:
+        w_menosx = int(tabla_generacion["x+t"].iloc[-1]) - edad_renta
+        total_fracciones = w_menosx * fracciones_por_anio
+    else:
+        total_fracciones = int(temporalidad * fracciones_por_anio)
+
+    # Si se proporciona una tasa fija, generar una lista de tasas constantes
+    if interes is not None:
+        # Calcular la duración en años para generar la lista
+        duracion_anios = total_fracciones // fracciones_por_anio + 1
+        lista_intereses = [0] + [interes] * duracion_anios  # [0, interes, interes, ...]
+
+    # Interpolar la tabla generacional para todas las fracciones necesarias
+    tabla_fraccionada = interpolar_lx_fraccionada_completa(tabla_generacion, edad_renta, w_menosx if temporalidad is None else temporalidad, fracciones_por_anio)
 
     # Preparar la tabla de flujos
-    tabla_flujos = pd.DataFrame(columns=['k', 'v^k', 'k p_x', 'v^k * k p_x', 'C * v^k * k p_x'])
+    tabla_flujos = pd.DataFrame(columns=['k', 'v^k', 'k p_x', 'v^k * k p_x', 'C * k p_x'])
 
     sumatorio = 0.0
     if tipo_renta == "prepagable":
-        if diferimiento is None:  # Renta prepagable, anual, inmediata
-            if temporalidad is None:  # Renta vitalicia
-                for i in range(w_menosx):
-                    val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
-                    if tipo_ajuste == "geometrica":
-                        cap_ajustado = capital * geometrica(tipo_renta, i, factor_q)
-                    elif tipo_ajuste == "aritmetica":
-                        cap_ajustado = aritmetica(capital, tipo_renta, i, incremento_h)
-                    else:
-                        cap_ajustado = capital
-                    flujo = val_medio * vk * cap_ajustado
-                    sumatorio += flujo / capital  # Sumatorio unitario
-                    tabla_flujos.loc[i] = [i, vk, val_medio, val_medio * vk, flujo]
-            else:  # Renta temporal
-                for i in range(int(temporalidad)):
-                    val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
-                    if tipo_ajuste == "geometrica":
-                        cap_ajustado = capital * geometrica(tipo_renta, i, factor_q)
-                    elif tipo_ajuste == "aritmetica":
-                        cap_ajustado = aritmetica(capital, tipo_renta, i, incremento_h)
-                    else:
-                        cap_ajustado = capital
-                    flujo = val_medio * vk * cap_ajustado
-                    sumatorio += flujo / capital
-                    tabla_flujos.loc[i] = [i, vk, val_medio, val_medio * vk, flujo]
-        else:  # Renta prepagable, anual, diferida
-            diferimiento = int(diferimiento)
+        if diferimiento is None:  # Renta prepagable, inmediata
             if temporalidad is None:  # Vitalicia
-                for i in range(diferimiento, w_menosx):
-                    val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
+                for f in range(total_fracciones):
+                    t_anios = f / fracciones_por_anio  # Tiempo en años fraccionarios
+                    val_medio = tpx(edad_renta, t_anios, tabla_fraccionada, fracciones_por_anio)
+                    año_actual = f // fracciones_por_anio  # Año correspondiente
+                    vk = v(lista_intereses, año_actual)
                     if tipo_ajuste == "geometrica":
-                        cap_ajustado = capital * geometrica(tipo_renta, i, factor_q, diferimiento)
+                        cap_ajustado = capital * geometrica(tipo_renta, año_actual, factor_q)
                     elif tipo_ajuste == "aritmetica":
-                        cap_ajustado = aritmetica(capital, tipo_renta, i, incremento_h, diferimiento)
+                        cap_ajustado = aritmetica(capital, tipo_renta, año_actual, incremento_h)
                     else:
                         cap_ajustado = capital
-                    flujo = val_medio * vk * cap_ajustado
-                    sumatorio += flujo / capital
-                    tabla_flujos.loc[i] = [i, vk, val_medio, val_medio * vk, flujo]
+                    flujo = val_medio * cap_ajustado  # Arreglago el Flujo Probable de Pago
+                    sumatorio += (val_medio * vk * cap_ajustado) / capital  # Mantener v^k para sumatorio
+                    tabla_flujos.loc[f] = [t_anios, vk, val_medio, val_medio * vk, flujo]
             else:  # Temporal
-                for i in range(diferimiento, int(temporalidad) + diferimiento):
-                    val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
+                for f in range(total_fracciones):
+                    t_anios = f / fracciones_por_anio
+                    val_medio = tpx(edad_renta, t_anios, tabla_fraccionada, fracciones_por_anio)
+                    año_actual = f // fracciones_por_anio
+                    vk = v(lista_intereses, año_actual)
                     if tipo_ajuste == "geometrica":
-                        cap_ajustado = capital * geometrica(tipo_renta, i, factor_q, diferimiento)
+                        cap_ajustado = capital * geometrica(tipo_renta, año_actual, factor_q)
                     elif tipo_ajuste == "aritmetica":
-                        cap_ajustado = aritmetica(capital, tipo_renta, i, incremento_h, diferimiento)
+                        cap_ajustado = aritmetica(capital, tipo_renta, año_actual, incremento_h)
                     else:
                         cap_ajustado = capital
-                    flujo = val_medio * vk * cap_ajustado
-                    sumatorio += flujo / capital
-                    tabla_flujos.loc[i] = [i, vk, val_medio, val_medio * vk, flujo]
-
+                    flujo = val_medio * cap_ajustado
+                    sumatorio += (val_medio * vk * cap_ajustado) / capital
+                    tabla_flujos.loc[f] = [t_anios, vk, val_medio, val_medio * vk, flujo]
+        else:  # Renta prepagable, diferida
+            diferimiento_fracciones = int(diferimiento * fracciones_por_anio)
+            if temporalidad is None:  # Vitalicia
+                for f in range(diferimiento_fracciones, total_fracciones):
+                    t_anios = f / fracciones_por_anio
+                    val_medio = tpx(edad_renta, t_anios, tabla_fraccionada, fracciones_por_anio)
+                    año_actual = f // fracciones_por_anio
+                    vk = v(lista_intereses, año_actual)
+                    if tipo_ajuste == "geometrica":
+                        cap_ajustado = capital * geometrica(tipo_renta, año_actual, factor_q, diferimiento)
+                    elif tipo_ajuste == "aritmetica":
+                        cap_ajustado = aritmetica(capital, tipo_renta, año_actual, incremento_h, diferimiento)
+                    else:
+                        cap_ajustado = capital
+                    flujo = val_medio * cap_ajustado
+                    sumatorio += (val_medio * vk * cap_ajustado) / capital
+                    tabla_flujos.loc[f] = [t_anios, vk, val_medio, val_medio * vk, flujo]
+            else:  # Temporal
+                for f in range(diferimiento_fracciones, total_fracciones + diferimiento_fracciones):
+                    t_anios = f / fracciones_por_anio
+                    val_medio = tpx(edad_renta, t_anios, tabla_fraccionada, fracciones_por_anio)
+                    año_actual = f // fracciones_por_anio
+                    vk = v(lista_intereses, año_actual)
+                    if tipo_ajuste == "geometrica":
+                        cap_ajustado = capital * geometrica(tipo_renta, año_actual, factor_q, diferimiento)
+                    elif tipo_ajuste == "aritmetica":
+                        cap_ajustado = aritmetica(capital, tipo_renta, año_actual, incremento_h, diferimiento)
+                    else:
+                        cap_ajustado = capital
+                    flujo = val_medio * cap_ajustado
+                    sumatorio += (val_medio * vk * cap_ajustado) / capital
+                    tabla_flujos.loc[f] = [t_anios, vk, val_medio, val_medio * vk, flujo]
+    
     elif tipo_renta == "pospagable":
-        if diferimiento is None:  # Renta pospagable, anual, inmediata
+        if diferimiento is None:  # Renta pospagable, inmediata
             if temporalidad is None:  # Vitalicia
-                for i in range(1, w_menosx):
-                    val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
+                for f in range(1, total_fracciones):
+                    t_anios = f / fracciones_por_anio
+                    val_medio = tpx(edad_renta, t_anios, tabla_fraccionada, fracciones_por_anio)
+                    año_actual = f // fracciones_por_anio
+                    vk = v(lista_intereses, año_actual)
                     if tipo_ajuste == "geometrica":
-                        cap_ajustado = capital * geometrica(tipo_renta, i, factor_q)
+                        cap_ajustado = capital * geometrica(tipo_renta, año_actual, factor_q)
                     elif tipo_ajuste == "aritmetica":
-                        cap_ajustado = aritmetica(capital, tipo_renta, i, incremento_h)
+                        cap_ajustado = aritmetica(capital, tipo_renta, año_actual, incremento_h)
                     else:
                         cap_ajustado = capital
-                    flujo = val_medio * vk * cap_ajustado
-                    sumatorio += flujo / capital
-                    tabla_flujos.loc[i-1] = [i, vk, val_medio, val_medio * vk, flujo]
+                    flujo = val_medio * cap_ajustado
+                    sumatorio += (val_medio * vk * cap_ajustado) / capital
+                    tabla_flujos.loc[f-1] = [t_anios, vk, val_medio, val_medio * vk, flujo]
             else:  # Temporal
-                for i in range(1, int(temporalidad) + 1):
-                    val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
+                for f in range(1, total_fracciones + 1):
+                    t_anios = f / fracciones_por_anio
+                    val_medio = tpx(edad_renta, t_anios, tabla_fraccionada, fracciones_por_anio)
+                    año_actual = f // fracciones_por_anio
+                    vk = v(lista_intereses, año_actual)
                     if tipo_ajuste == "geometrica":
-                        cap_ajustado = capital * geometrica(tipo_renta, i, factor_q)
+                        cap_ajustado = capital * geometrica(tipo_renta, año_actual, factor_q)
                     elif tipo_ajuste == "aritmetica":
-                        cap_ajustado = aritmetica(capital, tipo_renta, i, incremento_h)
+                        cap_ajustado = aritmetica(capital, tipo_renta, año_actual, incremento_h)
                     else:
                         cap_ajustado = capital
-                    flujo = val_medio * vk * cap_ajustado
-                    sumatorio += flujo / capital
-                    tabla_flujos.loc[i-1] = [i, vk, val_medio, val_medio * vk, flujo]
-        else:  # Renta pospagable, anual, diferida
-            diferimiento = int(diferimiento)
+                    flujo = val_medio * cap_ajustado
+                    sumatorio += (val_medio * vk * cap_ajustado) / capital
+                    tabla_flujos.loc[f-1] = [t_anios, vk, val_medio, val_medio * vk, flujo]
+        else:  # Renta pospagable, diferida
+            diferimiento_fracciones = int(diferimiento * fracciones_por_anio)
             if temporalidad is None:  # Vitalicia
-                for i in range(diferimiento + 1, w_menosx):
-                    val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
+                for f in range(diferimiento_fracciones + 1, total_fracciones):
+                    t_anios = f / fracciones_por_anio
+                    val_medio = tpx(edad_renta, t_anios, tabla_fraccionada, fracciones_por_anio)
+                    año_actual = f // fracciones_por_anio
+                    vk = v(lista_intereses, año_actual)
                     if tipo_ajuste == "geometrica":
-                        cap_ajustado = capital * geometrica(tipo_renta, i, factor_q, diferimiento)
+                        cap_ajustado = capital * geometrica(tipo_renta, año_actual, factor_q, diferimiento)
                     elif tipo_ajuste == "aritmetica":
-                        cap_ajustado = aritmetica(capital, tipo_renta, i, incremento_h, diferimiento)
+                        cap_ajustado = aritmetica(capital, tipo_renta, año_actual, incremento_h, diferimiento)
                     else:
                         cap_ajustado = capital
-                    flujo = val_medio * vk * cap_ajustado
-                    sumatorio += flujo / capital
-                    tabla_flujos.loc[i-1] = [i, vk, val_medio, val_medio * vk, flujo]
+                    flujo = val_medio * cap_ajustado
+                    sumatorio += (val_medio * vk * cap_ajustado) / capital
+                    tabla_flujos.loc[f-1] = [t_anios, vk, val_medio, val_medio * vk, flujo]
             else:  # Temporal
-                for i in range(diferimiento + 1, int(temporalidad) + diferimiento + 1):
-                    val_medio = tpx(edad_renta, i, tabla_generacion)
-                    vk = v(interes, i, edad_renta, tabla_generacion, temporalidad, salto)
+                for f in range(diferimiento_fracciones + 1, total_fracciones + diferimiento_fracciones + 1):
+                    t_anios = f / fracciones_por_anio
+                    val_medio = tpx(edad_renta, t_anios, tabla_fraccionada, fracciones_por_anio)
+                    año_actual = f // fracciones_por_anio
+                    vk = v(lista_intereses, año_actual)
                     if tipo_ajuste == "geometrica":
-                        cap_ajustado = capital * geometrica(tipo_renta, i, factor_q, diferimiento)
+                        cap_ajustado = capital * geometrica(tipo_renta, año_actual, factor_q, diferimiento)
                     elif tipo_ajuste == "aritmetica":
-                        cap_ajustado = aritmetica(capital, tipo_renta, i, incremento_h, diferimiento)
+                        cap_ajustado = aritmetica(capital, tipo_renta, año_actual, incremento_h, diferimiento)
                     else:
                         cap_ajustado = capital
-                    flujo = val_medio * vk * cap_ajustado
-                    sumatorio += flujo / capital
-                    tabla_flujos.loc[i-1] = [i, vk, val_medio, val_medio * vk, flujo]
+                    flujo = val_medio * cap_ajustado
+                    sumatorio += (val_medio * vk * cap_ajustado) / capital
+                    tabla_flujos.loc[f-1] = [t_anios, vk, val_medio, val_medio * vk, flujo]
 
-    # Asegurarse de que 'k' sea entero
-    tabla_flujos['k'] = tabla_flujos['k'].astype(int)
-    print("Valores devueltos por renta:", sumatorio, sumatorio * capital, tabla_flujos)  # Depuración
+    # Asegurarse de que 'k' sea float (representa años fraccionarios)
+    tabla_flujos['k'] = tabla_flujos['k'].astype(float)
+    print("Valores devueltos por renta:", sumatorio, sumatorio * capital, tabla_flujos)
     return sumatorio, sumatorio * capital, tabla_flujos
