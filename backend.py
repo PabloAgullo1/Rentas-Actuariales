@@ -97,7 +97,7 @@ def tabla_gen(g, nombre_tabla):
     df.index.name = 'edad'
 
     # Generar la tabla generacional
-    x_mas_t_list = list(range(edad_inicio, len(df) + 1)) 
+    x_mas_t_list = list(range(edad_inicio, len(df))) 
     edad_t = list(range(0, len(x_mas_t_list)))
 
     resultados = pd.DataFrame(columns=['Edad', 'x+t'])
