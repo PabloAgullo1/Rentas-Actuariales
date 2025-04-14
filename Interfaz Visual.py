@@ -76,34 +76,30 @@ def calcular():
         tabla_generacion = tabla_gen(g, nombre_tabla)
 
         # Determinar si la tasa es fija o variable
-        tipo_interes = combo_tipo_interes.get()
+        # Intereses
+        # Intereses
+        # Intereses
         interes = None
         lista_intereses = None
-        if tipo_interes == "Fija":
-            interes_str = entry_interes_fijo.get()
+        if combo_tipo_interes.get() == "Fija":
+            interes_str = entry_interes_fijo.get().strip()
             if not interes_str:
-                raise ValueError("Debe ingresar una tasa de interés fija.")
-            try:
-                interes = float(interes_str.strip()) / 100  # Convertir porcentaje a decimal
-            except ValueError:
-                raise ValueError("La tasa de interés fija debe ser un número válido (ej. 3 para 3%).")
-        elif tipo_interes == "Variable":
-            intereses_str = entry_intereses.get()
-            saltos_str = entry_saltos.get()
+                raise ValueError("El interés fijo no puede estar vacío.")
+            interes = float(interes_str) / 100
+        else:
+            intereses_str = entry_intereses.get().strip()
+            saltos_str = entry_saltos.get().strip()
             if not intereses_str or not saltos_str:
-                raise ValueError("Debe ingresar las tasas de interés y los años de cambio.")
+                raise ValueError("Las tasas y los saltos no pueden estar vacíos para intereses variables.")
             try:
-                intereses = [float(i.strip()) / 100 for i in intereses_str.split(",")]
-                saltos = [int(s.strip()) for s in saltos_str.split(",")]
-            except ValueError:
-                raise ValueError("Las tasas de interés y los años de cambio deben ser números válidos (ej. 2, 4, 5 y 2, 5, 6).")
-
-            # Validar que las listas tengan la misma longitud
-            if len(intereses) != len(saltos):
-                raise ValueError("El número de tasas de interés debe coincidir con el número de años de cambio.")
-
-            # Generar la lista de tasas de interés usando funcion_intereses
-            lista_intereses = funcion_intereses(intereses, saltos, edad_renta, tabla_generacion, temporalidad)
+                intereses = [float(i.strip()) / 100 for i in intereses_str.split(",") if i.strip()]
+                saltos = [int(s.strip()) for s in saltos_str.split(",") if s.strip()]
+                if not intereses or not saltos:
+                    raise ValueError("Debe proporcionar al menos una tasa y un salto.")
+                # Pasar temporalidad, edad_renta y tabla_generacion
+                lista_intereses = funcion_intereses(intereses, saltos, edad_renta, tabla_generacion, temporalidad)
+            except ValueError as e:
+                raise ValueError(f"Error en tasas o saltos: {str(e)}")
 
         # Tipo de renta
         tipo_renta = combo_tipo_renta.get()
