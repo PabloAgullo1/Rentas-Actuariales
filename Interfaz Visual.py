@@ -9,12 +9,10 @@ def limpiar_tabla(tree):
     for item in tree.get_children():
         tree.delete(item)
 
-# Función para mostrar la tabla con las columnas actualizadas
 def mostrar_tabla_con_incrementos(tabla_flujos, tree, fracciones_por_anio=1):
     limpiar_tabla(tree)
     
     if fracciones_por_anio == 1:
-        # Mostrar formato normal para anual
         tree["columns"] = ('k', 'k p_x', 'C_k', 'v^k', 'k p_x * C_k * v^k')
         tree.heading('k', text='k')
         tree.heading('k p_x', text='k p_x')
@@ -28,10 +26,9 @@ def mostrar_tabla_con_incrementos(tabla_flujos, tree, fracciones_por_anio=1):
                 f"{row['k p_x']:.6f}",
                 f"{row['C_k']:.2f}",
                 f"{row['v^k']:.6f}",
-                f"{row['k p_x * C_k * v^k']:.2f}"
+                f"{row['valor_actual']:.2f}"
             ))
     else:
-        # Mostrar formato detallado para fraccionado
         tree["columns"] = ('k', 'j', 'C_k_fraccion', 'v^k_fraccion', 'k_px_fraccion', 
                           'v_px_fraccion', 'C_px_vk_fraccion')
         tree.heading('k', text='k (año)')
@@ -42,25 +39,16 @@ def mostrar_tabla_con_incrementos(tabla_flujos, tree, fracciones_por_anio=1):
         tree.heading('v_px_fraccion', text=f'v^(k+j/{fracciones_por_anio}) * (k+j/{fracciones_por_anio}) p_x')
         tree.heading('C_px_vk_fraccion', text=f'C_k/{fracciones_por_anio} * (k+j/{fracciones_por_anio}) p_x * v^(k+j/{fracciones_por_anio})')
         
-        # Obtener el diferimiento del contexto (puede ser pasado como parámetro o inferido)
-        # Para este caso, asumimos que el diferimiento está disponible; de lo contrario, necesitaríamos pasarlo
-        # Por simplicidad, lo inferimos del primer valor de t
-        diferimiento = int(tabla_flujos['t'].iloc[0])
-        
         for index, row in tabla_flujos.iterrows():
-            t_relativo = row['t'] - diferimiento
-            fraccion = t_relativo % 1  # Obtener la parte fraccionaria
-            if abs(fraccion) < 1e-6 or abs(fraccion - 1) < 1e-6:  # Si t es un entero o muy cercano a 1
-                j = fracciones_por_anio  # El último mes del año
-                k_entero = int(t_relativo) - 1 if abs(fraccion - 1) < 1e-6 else int(t_relativo)
-            else:
-                j = int(round(fraccion * fracciones_por_anio))
-                k_entero = int(t_relativo)
+            j = row['j']  # Usar directamente la columna j
+            k_entero = row['k']
             
-            # Calcular valores fraccionados
-            C_k_fraccion = row['C_k'] / fracciones_por_anio
+            C_k_fraccion = row['C_k']
             v_px_fraccion = row['v^k'] * row['k p_x']
             C_px_vk_fraccion = row['valor_actual']
+            
+            # Depuración temporal para confirmar valores
+            print(f"k={k_entero}, j={j}, C_k={C_k_fraccion:.2f}")
             
             tree.insert("", tk.END, values=(
                 f"{k_entero}",
@@ -71,6 +59,13 @@ def mostrar_tabla_con_incrementos(tabla_flujos, tree, fracciones_por_anio=1):
                 f"{v_px_fraccion:.6f}",
                 f"{C_px_vk_fraccion:.6f}"
             ))
+
+    # Ajustar anchos de columnas
+    for col in tree["columns"]:
+        tree.column(col, width=100, anchor='center')
+    # Ajustar anchos de columnas
+    for col in tree["columns"]:
+        tree.column(col, width=100, anchor='center')
 
 # Funciones para actualizar campos dinámicamente
 def actualizar_campos_interes(event=None):
@@ -283,7 +278,7 @@ def calcular():
             fracciones_por_anio = int(entry_fracciones.get())
 
         # [Sección 4: Configurar intereses]
-        tabla_generacion = tabla_gen(g, nombre_tabla)  # Generar tabla para usar en funcion_intereses
+        tabla_generacion = tabla_gen(g, nombre_tabla)
         if combo_tipo_interes.get() == "Fija":
             interes = float(entry_interes_fijo.get()) / 100
             lista_intereses = None
@@ -293,13 +288,11 @@ def calcular():
             lista_intereses = funcion_intereses(intereses, saltos, edad_renta, tabla_generacion, duracion=temporalidad)
             interes = None
 
-        # [Sección 5: Generar tabla de mortalidad]
-        # Ya generamos tabla_generacion arriba para usar en funcion_intereses
+        # Columnas esperadas para tabla_flujos
+        required_columns = ['k', 't', 't_relativo', 'k p_x', 'C_k', 'v^k', 'valor_actual']
 
         # [Sección 6: Lógica de cálculo principal]
         if fracciones_por_anio > 1:
-            # --- LÓGICA PARA FRACCIONADAS ---
-            # Configurar factores según tipo de incremento
             factores = {
                 'tipo': None,
                 'interes': interes if lista_intereses is None else None,
@@ -330,14 +323,23 @@ def calcular():
                 tipo_renta, temporalidad, fracciones_por_anio
             )
 
-            tabla_flujos = calcular_renta_fraccionada(
+            # Ahora retorna tabla y sumatorio
+            tabla_flujos, sumatorio = calcular_renta_fraccionada(
                 tabla_flujos, tipo_renta, cuantia_inicial,
                 factores, fracciones_por_anio
             )
 
-            sumatorio = tabla_flujos['valor_actual'].sum()
+            # Estandarizar columnas
+            if 'k p_x * C_k * v^k' in tabla_flujos.columns:
+                tabla_flujos['valor_actual'] = tabla_flujos['k p_x * C_k * v^k']
+            if 'k' not in tabla_flujos.columns:
+                tabla_flujos['k'] = tabla_flujos['t'].astype(int)
+            if 't_relativo' not in tabla_flujos.columns:
+                tabla_flujos['t_relativo'] = tabla_flujos['t'] - (diferimiento or 0)
+
             valor_actual_renta = sumatorio
-            
+
+            # Mostrar resultados
             mostrar_tabla_con_incrementos(tabla_flujos, tree, fracciones_por_anio)
             resultado_label.config(
                 text=f"Valor actuarial unitario: {sumatorio:.6f}\n"
@@ -345,7 +347,6 @@ def calcular():
                 fg="#030303"
             )
         else:
-            # --- LÓGICA PARA ANUAL ---
             if seleccion_incremento == "Geométrico fijo":
                 factor_q = 1 + float(entry_factor_q.get()) / 100
                 sumatorio, valor_renta, tabla_flujos = renta_geometrica(
@@ -385,7 +386,7 @@ def calcular():
                     lista_incrementos=lista_incrementos, saltos_incrementos=saltos_incrementos,
                     fracciones_por_anio=1
                 )
-            elif seleccion_incremento == "Sin incremento":
+            else:  # "Sin incremento"
                 sumatorio, valor_renta, tabla_flujos = renta_geometrica(
                     tipo_renta, edad_renta, cuantia_inicial, temporalidad, diferimiento,
                     interes=interes, lista_intereses=lista_intereses,
@@ -394,7 +395,16 @@ def calcular():
                     fracciones_por_anio=1
                 )
 
-            mostrar_tabla_con_incrementos(tabla_flujos, tree)
+            # Estandarizar columnas
+            if 'k p_x * C_k * v^k' in tabla_flujos.columns:
+                tabla_flujos['valor_actual'] = tabla_flujos['k p_x * C_k * v^k']
+            if 'k' not in tabla_flujos.columns:
+                tabla_flujos['k'] = tabla_flujos['t'].astype(int)
+            if 't_relativo' not in tabla_flujos.columns:
+                tabla_flujos['t_relativo'] = tabla_flujos['t'] - (diferimiento or 0)
+
+            # Mostrar resultados
+            mostrar_tabla_con_incrementos(tabla_flujos, tree, fracciones_por_anio)
             resultado_label.config(
                 text=f"Prima única: {valor_renta:.2f} €\n"
                      f"Sumatorio actuarial: {sumatorio:.6f}",
@@ -584,7 +594,7 @@ tree_style.map("Treeview", background=[("selected", "#E0E0E0")])
 tree_style.map("Treeview.Heading", background=[("active", "#0F2A44")], foreground=[("active", "#FFFFFF")])
 
 columns = ('k', 'k p_x', 'C_k', 'v^k', 'k p_x * C_k * v^k')
-tree = ttk.Treeview(table_frame, columns=columns, show='headings', height=15, style="Treeview")
+tree = ttk.Treeview(table_frame, columns=columns, show='headings', style="Treeview")  # Removemos height
 tree.heading('k', text='k')
 tree.heading('k p_x', text='k p_x')
 tree.heading('C_k', text='C_k')
@@ -595,12 +605,18 @@ tree.column('k p_x', width=120, anchor='center')
 tree.column('C_k', width=120, anchor='center')
 tree.column('v^k', width=120, anchor='center')
 tree.column('k p_x * C_k * v^k', width=140, anchor='center')
-tree.pack(fill="both", expand=True)
 
 # Scrollbar para la tabla
 scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
-scrollbar.pack(side="right", fill="y")
 tree.configure(yscrollcommand=scrollbar.set)
+
+# Usar grid para mejor control
+tree.grid(row=0, column=0, sticky="nsew")
+scrollbar.grid(row=0, column=1, sticky="ns")
+
+# Configurar grid para que table_frame se expanda
+table_frame.grid_rowconfigure(0, weight=1)
+table_frame.grid_columnconfigure(0, weight=1)
 
 # Iniciar la ventana
 root.mainloop()
