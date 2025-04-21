@@ -40,14 +40,13 @@ def mostrar_tabla_con_incrementos(tabla_flujos, tree, fracciones_por_anio=1):
         tree.heading('C_px_vk_fraccion', text=f'C_k/{fracciones_por_anio} * (k+j/{fracciones_por_anio}) p_x * v^(k+j/{fracciones_por_anio})')
         
         for index, row in tabla_flujos.iterrows():
-            j = row['j']  # Usar directamente la columna j
+            j = row['j']
             k_entero = row['k']
             
             C_k_fraccion = row['C_k']
             v_px_fraccion = row['v^k'] * row['k p_x']
             C_px_vk_fraccion = row['valor_actual']
             
-            # Depuración temporal para confirmar valores
             print(f"k={k_entero}, j={j}, C_k={C_k_fraccion:.2f}")
             
             tree.insert("", tk.END, values=(
@@ -60,10 +59,6 @@ def mostrar_tabla_con_incrementos(tabla_flujos, tree, fracciones_por_anio=1):
                 f"{C_px_vk_fraccion:.6f}"
             ))
 
-    # Ajustar anchos de columnas
-    for col in tree["columns"]:
-        tree.column(col, width=100, anchor='center')
-    # Ajustar anchos de columnas
     for col in tree["columns"]:
         tree.column(col, width=100, anchor='center')
 
@@ -147,6 +142,19 @@ def actualizar_campos_incrementos(event=None):
         entry_incrementos.grid(row=2, column=1, padx=5, pady=5, sticky="w")
         label_saltos_incrementos.grid(row=3, column=0, padx=5, pady=5, sticky="e")
         entry_saltos_incrementos.grid(row=3, column=1, padx=5, pady=5, sticky="w")
+
+def actualizar_campos_tabla(event=None):
+    seleccion = combo_tabla.get()
+    if "UNISEX" in seleccion:
+        label_prop_hombres.grid(row=4, column=0, padx=5, pady=5, sticky="e")
+        entry_prop_hombres.grid(row=4, column=1, padx=5, pady=5, sticky="w")
+        label_prop_mujeres.grid(row=5, column=0, padx=5, pady=5, sticky="e")
+        entry_prop_mujeres.grid(row=5, column=1, padx=5, pady=5, sticky="w")
+    else:
+        label_prop_hombres.grid_remove()
+        entry_prop_hombres.grid_remove()
+        label_prop_mujeres.grid_remove()
+        entry_prop_mujeres.grid_remove()
 
 # Función para validar entradas
 def validar_entradas():
@@ -238,6 +246,16 @@ def validar_entradas():
             if saltos_incrementos[0] <= 0:
                 raise ValueError("Los años de cambio de incrementos deben ser mayores a 0.")
 
+        # Validar proporciones para tablas unisex
+        nombre_tabla = combo_tabla.get()
+        if "UNISEX" in nombre_tabla:
+            prop_hombres = float(entry_prop_hombres.get())
+            prop_mujeres = float(entry_prop_mujeres.get())
+            if prop_hombres < 0 or prop_mujeres < 0:
+                raise ValueError("Los porcentajes de hombres y mujeres no pueden ser negativos.")
+            if abs(prop_hombres + prop_mujeres - 100) > 1e-6:
+                raise ValueError("Los porcentajes de hombres y mujeres deben sumar 100.")
+
         return True
     except ValueError as e:
         messagebox.showerror("Error de Validación", str(e))
@@ -248,7 +266,6 @@ def validar_entradas():
 
 # Función para calcular
 def calcular():
-    # Validar entradas
     if not validar_entradas():
         return
 
@@ -261,7 +278,17 @@ def calcular():
         tipo_renta = combo_tipo_renta.get()
         cuantia_inicial = float(entry_cuantia_inicial.get())
         seleccion_incremento = combo_tipo_incremento.get()
-        
+
+        # Obtener proporciones para tablas unisex
+        if "UNISEX" in nombre_tabla:
+            prop_hombres = float(entry_prop_hombres.get())
+            prop_mujeres = float(entry_prop_mujeres.get())
+            w_male = prop_hombres / 100
+            w_female = prop_mujeres / 100
+        else:
+            w_male = 0.5  # Valor por defecto (no se usa si no es unisex)
+            w_female = 0.5
+
         # [Sección 2: Procesar temporalidad y diferimiento]
         if temporalidad == "Vitalicia":
             temporalidad = None
@@ -278,7 +305,7 @@ def calcular():
             fracciones_por_anio = int(entry_fracciones.get())
 
         # [Sección 4: Configurar intereses]
-        tabla_generacion = tabla_gen(g, nombre_tabla)
+        tabla_generacion = tabla_gen(g, nombre_tabla, w_male, w_female)  # Pasar proporciones
         if combo_tipo_interes.get() == "Fija":
             interes = float(entry_interes_fijo.get()) / 100
             lista_intereses = None
@@ -291,7 +318,7 @@ def calcular():
         # Columnas esperadas para tabla_flujos
         required_columns = ['k', 't', 't_relativo', 'k p_x', 'C_k', 'v^k', 'valor_actual']
 
-        # [Sección 6: Lógica de cálculo principal]
+        # [Sección 5: Lógica de cálculo principal]
         if fracciones_por_anio > 1:
             factores = {
                 'tipo': None,
@@ -323,7 +350,6 @@ def calcular():
                 tipo_renta, temporalidad, fracciones_por_anio
             )
 
-            # Ahora retorna tabla y sumatorio
             tabla_flujos, sumatorio = calcular_renta_fraccionada(
                 tabla_flujos, tipo_renta, cuantia_inicial,
                 factores, fracciones_por_anio
@@ -337,15 +363,24 @@ def calcular():
             if 't_relativo' not in tabla_flujos.columns:
                 tabla_flujos['t_relativo'] = tabla_flujos['t'] - (diferimiento or 0)
 
-            valor_actual_renta = sumatorio
+            # Prima única es el sumatorio de valor_actual
+            prima_unica = sumatorio
+            # Calcular valor actuarial unitario solo para rentas constantes
+            valor_actuarial_unitario = sumatorio / cuantia_inicial if seleccion_incremento == "Sin incremento" else None
 
             # Mostrar resultados
             mostrar_tabla_con_incrementos(tabla_flujos, tree, fracciones_por_anio)
-            resultado_label.config(
-                text=f"Valor actuarial unitario: {sumatorio:.6f}\n"
-                     f"Valor total de la renta: {valor_actual_renta:.2f} €",
-                fg="#030303"
-            )
+            if seleccion_incremento == "Sin incremento":
+                resultado_label.config(
+                    text=f"Valor actuarial unitario: {valor_actuarial_unitario:.6f}\n"
+                         f"Prima única: {prima_unica:.2f} €",
+                    fg="#030303"
+                )
+            else:
+                resultado_label.config(
+                    text=f"Prima única (sumatorio C_k * v^k * k p_x): {prima_unica:.2f} €",
+                    fg="#030303"
+                )
         else:
             if seleccion_incremento == "Geométrico fijo":
                 factor_q = 1 + float(entry_factor_q.get()) / 100
@@ -391,7 +426,7 @@ def calcular():
                     tipo_renta, edad_renta, cuantia_inicial, temporalidad, diferimiento,
                     interes=interes, lista_intereses=lista_intereses,
                     tabla_generacion=tabla_generacion,
-                    lista_factores=[1.0],  # Sin crecimiento
+                    lista_factores=[1.0],
                     fracciones_por_anio=1
                 )
 
@@ -403,13 +438,24 @@ def calcular():
             if 't_relativo' not in tabla_flujos.columns:
                 tabla_flujos['t_relativo'] = tabla_flujos['t'] - (diferimiento or 0)
 
+            # Prima única es el sumatorio de valor_actual
+            prima_unica = sumatorio
+            # Calcular valor actuarial unitario solo para rentas constantes
+            valor_actuarial_unitario = sumatorio / cuantia_inicial if seleccion_incremento == "Sin incremento" else None
+
             # Mostrar resultados
             mostrar_tabla_con_incrementos(tabla_flujos, tree, fracciones_por_anio)
-            resultado_label.config(
-                text=f"Prima única: {valor_renta:.2f} €\n"
-                     f"Sumatorio actuarial: {sumatorio:.6f}",
-                fg="#030303"
-            )
+            if seleccion_incremento == "Sin incremento":
+                resultado_label.config(
+                    text=f"Valor actuarial unitario: {valor_actuarial_unitario:.6f}\n"
+                         f"Prima única: {prima_unica:.2f} €",
+                    fg="#030303"
+                )
+            else:
+                resultado_label.config(
+                    text=f"Prima única (sumatorio C_k * v^k * k p_x): {prima_unica:.2f} €",
+                    fg="#030303"
+                )
 
     except Exception as e:
         messagebox.showerror("Error de Cálculo", f"Error: {str(e)}")
@@ -418,14 +464,14 @@ def calcular():
 root = tk.Tk()
 root.title("JUPAMA ACTUARIAL SOFTWARE")
 root.geometry("1000x800")
-root.configure(bg="#F1EFEC")  # Fondo claro
+root.configure(bg="#F1EFEC")
 
 # Forzar el tema 'clam' para mejor control de estilos
 style = ttk.Style()
 style.theme_use('clam')
 
 # Estilo general
-label_style = {"bg": "#D4C9BE", "fg": "#030303", "font": ("Roboto", 11, "bold")}  # Etiquetas en negro sobre fondo beige
+label_style = {"bg": "#D4C9BE", "fg": "#030303", "font": ("Roboto", 11, "bold")}
 entry_style = ttk.Style()
 entry_style.configure("TEntry", fieldbackground="#FFFFFF", foreground="#030303", bordercolor="#123458", lightcolor="#123458")
 combo_style = ttk.Style()
@@ -467,10 +513,27 @@ combo_tabla = ttk.Combobox(left_frame, values=[
     "PERM_2020_Indiv_2Orden", "PERM_2020_Indiv_1Orden",
     "PERF_2020_Indiv_2Orden", "PERF_2020_Indiv_1Orden",
     "PERM_2020_Colectivos_2Orden", "PERM_2020_Colectivos_1Orden",
-    "PERF_2020_Colectivos_2Orden", "PERF_2020_Colectivos_1Orden"
+    "PERF_2020_Colectivos_2Orden", "PERF_2020_Colectivos_1Orden",
+    "PER_2020_Indiv_1Orden_UNISEX",
+    "PER_2020_Colec_1Orden_UNISEX",
+    "PER_2000P_UNISEX"
 ], state="readonly")
 combo_tabla.grid(row=3, column=1, padx=5, pady=5, sticky="w")
 combo_tabla.set("PERM2000C")
+combo_tabla.bind("<<ComboboxSelected>>", actualizar_campos_tabla)
+
+# Nuevos campos para proporciones (inicialmente ocultos)
+label_prop_hombres = tk.Label(left_frame, text="Porcentaje de hombres (%):", **label_style)
+label_prop_hombres.grid(row=4, column=0, padx=5, pady=5, sticky="e")
+entry_prop_hombres = ttk.Entry(left_frame)
+entry_prop_hombres.grid(row=4, column=1, padx=5, pady=5, sticky="w")
+entry_prop_hombres.insert(0, "50")
+
+label_prop_mujeres = tk.Label(left_frame, text="Porcentaje de mujeres (%):", **label_style)
+label_prop_mujeres.grid(row=5, column=0, padx=5, pady=5, sticky="e")
+entry_prop_mujeres = ttk.Entry(left_frame)
+entry_prop_mujeres.grid(row=5, column=1, padx=5, pady=5, sticky="w")
+entry_prop_mujeres.insert(0, "50")
 
 # --- Sección Central: Datos de la Renta ---
 tk.Label(center_frame, text="Datos de la Renta", bg="#D4C9BE", fg="#123458", font=("Roboto", 12, "bold")).grid(row=0, column=0, columnspan=2, pady=5)
@@ -568,6 +631,7 @@ actualizar_campos_interes()
 actualizar_campos_temporalidad()
 actualizar_campos_periodicidad()
 actualizar_campos_incrementos()
+actualizar_campos_tabla()
 
 # Botón Calcular y Resultado
 button_frame = tk.Frame(root, bg="#F1EFEC")
@@ -594,7 +658,7 @@ tree_style.map("Treeview", background=[("selected", "#E0E0E0")])
 tree_style.map("Treeview.Heading", background=[("active", "#0F2A44")], foreground=[("active", "#FFFFFF")])
 
 columns = ('k', 'k p_x', 'C_k', 'v^k', 'k p_x * C_k * v^k')
-tree = ttk.Treeview(table_frame, columns=columns, show='headings', style="Treeview")  # Removemos height
+tree = ttk.Treeview(table_frame, columns=columns, show='headings', style="Treeview")
 tree.heading('k', text='k')
 tree.heading('k p_x', text='k p_x')
 tree.heading('C_k', text='C_k')

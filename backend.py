@@ -23,14 +23,17 @@ def generacion(g, nombre_tabla):
     Raises:
         ValueError: Si la generación no es válida o la tabla no es reconocida.
     """
-    if nombre_tabla in ['PERM2000C', 'PERF2000C', 'PERM2000P', 'PERF2000P']:
+    if nombre_tabla in ['PERM2000C', 'PERF2000C', 'PERM2000P', 'PERF2000P', 'PER_2000P_UNISEX']:
         anio_base = 2000
         if g > 2000:
             raise ValueError("La generación no puede ser mayor a 2000.")
-    elif nombre_tabla in ['PERM_2020_Indiv_2Orden', 'PERM_2020_Indiv_1Orden',
-                          'PERF_2020_Indiv_2Orden', 'PERF_2020_Indiv_1Orden',
-                          'PERM_2020_Colectivos_2Orden', 'PERM_2020_Colectivos_1Orden',
-                          'PERF_2020_Colectivos_2Orden', 'PERF_2020_Colectivos_1Orden']:
+    elif nombre_tabla in [
+        'PERM_2020_Indiv_2Orden', 'PERM_2020_Indiv_1Orden',
+        'PERF_2020_Indiv_2Orden', 'PERF_2020_Indiv_1Orden',
+        'PERM_2020_Colectivos_2Orden', 'PERM_2020_Colectivos_1Orden',
+        'PERF_2020_Colectivos_2Orden', 'PERF_2020_Colectivos_1Orden',
+        'PER_2020_Indiv_1Orden_UNISEX', 'PER_2020_Colec_1Orden_UNISEX'
+    ]:
         anio_base = 2012
         if g > 2012:
             raise ValueError("La generación no puede ser mayor a 2012.")
@@ -53,76 +56,114 @@ def q_x(qx, mejora, t):
     """
     return qx * math.exp(-mejora * t)
 
-def tabla_gen(g, nombre_tabla):
+
+def tabla_gen(g, nombre_tabla, w_male=0.5, w_female=0.5):
     """
-    Genera la tabla generacional para un asegurado.
-    
+    Genera la tabla generacional para un asegurado, incluyendo tablas unisex.
+
     Args:
         g (int): Año de nacimiento.
         nombre_tabla (str): Nombre de la tabla de mortalidad.
-    
+        w_male (float): Proporción de hombres (por ejemplo, 0.6 para 60%).
+        w_female (float): Proporción de mujeres (por ejemplo, 0.4 para 40%).
+
     Returns:
         pd.DataFrame: Tabla generacional con columnas:
             - Anual: 'x+t', 'qx+t ajustado', 'lx', 'dx'.
     """
+    # Validar que las proporciones sumen 1
+    if abs(w_male + w_female - 1.0) > 1e-6:
+        raise ValueError(f"Las proporciones deben sumar 1. w_male={w_male}, w_female={w_female}")
+
     # Obtener el año base
     anio_base = generacion(g, nombre_tabla)
     # Calcular la edad inicial (x+t) en el año base
     edad_inicio = anio_base - g
-    
-    # Leer la tabla de mortalidad
-    df = hojas[nombre_tabla].copy()
-    
-    # Asegurarnos de que el índice sea 'x+t' o similar
-    if df.index.name is None or 'x+t' not in df.index.name.lower():
-        index_col = None
-        for col in df.columns:
-            if 'x+t' in col.lower():
-                index_col = col
-                break
-        if index_col:
-            df.set_index(index_col, inplace=True)
-        else:
-            raise ValueError(f"No se encontró una columna de índice 'x+t' en la tabla {nombre_tabla}.")
 
-    # Imprimir las columnas para depurar
-    print(f"Columnas de la tabla {nombre_tabla}: {df.columns.tolist()}")
-    print("Primeros valores de la tabla de mortalidad:")
-    print(df.head(10))
+    # Función auxiliar para cargar y procesar una tabla base
+    def procesar_tabla_base(tabla_nombre):
+        # Leer la tabla de mortalidad
+        df = hojas[tabla_nombre].copy()
 
-    # Renombrar columnas según el tipo de tabla
-    if len(df.columns) == 2:  # Tablas PERM2000/PERF2000 y PER_2020_Indiv_2Orden
-        # Verificar si es una tabla PER_2020 de 2do orden
-        if '2Orden' in nombre_tabla:
-            # Las columnas son 'qx+t, tabla base' y 'λx+t (mejora)'
+        # Asegurarnos de que el índice sea 'x+t' o similar
+        if df.index.name is None or 'x+t' not in df.index.name.lower():
+            index_col = None
+            for col in df.columns:
+                if 'x+t' in col.lower():
+                    index_col = col
+                    break
+            if index_col:
+                df.set_index(index_col, inplace=True)
+            else:
+                raise ValueError(f"No se encontró una columna de índice 'x+t' en la tabla {tabla_nombre}.")
+
+        # Imprimir las columnas para depurar
+        print(f"Columnas de la tabla {tabla_nombre}: {df.columns.tolist()}")
+        print(f"Primeros valores de la tabla de mortalidad {tabla_nombre}:")
+        print(df.head(10))
+
+        # Renombrar columnas según el tipo de tabla
+        if len(df.columns) == 2:  # Tablas PERM2000/PERF2000 y PER_2020_Indiv_2Orden
+            if '2Orden' in tabla_nombre:
+                df.columns = ['qx', 'mejora']
+            else:
+                df.columns = ['qx', 'mejora']
+        elif len(df.columns) == 4:  # Tablas PER_2020_Indiv_1Orden
+            df = df.iloc[:, [1, 3]]  # Seleccionamos 'qx+t, tabla base' y 'λx+t'
             df.columns = ['qx', 'mejora']
         else:
-            # Tablas PERM2000/PERF2000
-            df.columns = ['qx', 'mejora']
-    elif len(df.columns) == 4:  # Tablas PER_2020_Indiv_1Orden
-        # Las columnas son: 'Rec. técnico base', 'qx+t, tabla base', 'Rec. técnico factor', 'λx+t'
-        df = df.iloc[:, [1, 3]]  # Seleccionamos 'qx+t, tabla base' y 'λx+t'
-        df.columns = ['qx', 'mejora']
-    else:
-        raise ValueError(f"La tabla {nombre_tabla} tiene un número inesperado de columnas: {len(df.columns)}")
+            raise ValueError(f"La tabla {tabla_nombre} tiene un número inesperado de columnas: {len(df.columns)}")
 
-    df.index.name = 'edad'
+        df.index.name = 'edad'
 
-    # Generar la tabla generacional hasta ω
+        # Generar qx+t ajustado
+        qx_ajustado = []
+        for i in range(edad_inicio, omega + 1):
+            if i in df.index:
+                qx_ajustado.append(q_x(df.loc[i, 'qx'], df.loc[i, 'mejora'], i - edad_inicio))
+            else:
+                qx_ajustado.append(1.0)  # Forzar qx = 1 para edades fuera de la tabla
+
+        return qx_ajustado
+
+    # Parámetros
     omega = 120
     x_mas_t_list = list(range(edad_inicio, omega + 1))
     edad_t = list(range(0, len(x_mas_t_list)))
 
+    # Procesar tabla según el nombre
+    if nombre_tabla in [
+        "PERM2000C", "PERF2000C", "PERM2000P", "PERF2000P",
+        "PERM_2020_Indiv_2Orden", "PERM_2020_Indiv_1Orden",
+        "PERF_2020_Indiv_2Orden", "PERF_2020_Indiv_1Orden",
+        "PERM_2020_Colectivos_2Orden", "PERM_2020_Colectivos_1Orden",
+        "PERF_2020_Colectivos_2Orden", "PERF_2020_Colectivos_1Orden"
+    ]:
+        # Tablas estándar
+        qx_ajustado = procesar_tabla_base(nombre_tabla)
+    elif nombre_tabla == "PER_2020_Indiv_1Orden_UNISEX":
+        # Combinar PERM_2020_Indiv_1Orden y PERF_2020_Indiv_1Orden
+        qx_male = procesar_tabla_base("PERM_2020_Indiv_1Orden")
+        qx_female = procesar_tabla_base("PERF_2020_Indiv_1Orden") 
+        # Promedio ponderado
+        qx_ajustado = [w_male * qm + w_female * qf for qm, qf in zip(qx_male, qx_female)] #qx_male = [0.01, 0.02, 0.0] qx_female = [0.05, 0.02, 0.0] qx_ = [0.01, 0.05] 
+    elif nombre_tabla == "PER_2020_Colec_1Orden_UNISEX":
+        # Combinar PERM_2020_Colectivos_1Orden y PERF_2020_Colectivos_1Orden
+        qx_male = procesar_tabla_base("PERM_2020_Colectivos_1Orden")
+        qx_female = procesar_tabla_base("PERF_2020_Colectivos_1Orden")
+        qx_ajustado = [w_male * qm + w_female * qf for qm, qf in zip(qx_male, qx_female)]
+    elif nombre_tabla == "PER_2000P_UNISEX":
+        # Combinar PERM2000P y PERF2000P
+        qx_male = procesar_tabla_base("PERM2000P")
+        qx_female = procesar_tabla_base("PERF2000P")
+        qx_ajustado = [w_male * qm + w_female * qf for qm, qf in zip(qx_male, qx_female)]
+    else:
+        raise ValueError(f"Tabla {nombre_tabla} no encontrada.")
+
+    # Crear el DataFrame de resultados
     resultados = pd.DataFrame(columns=['Edad', 'x+t'])
     resultados['x+t'] = x_mas_t_list
     resultados['Edad'] = edad_t
-
-    qx_ajustado = []
-    for i in range(edad_inicio, omega + 1):
-        if i in df.index:
-            qx_ajustado.append(q_x(df.loc[i, 'qx'], df.loc[i, 'mejora'], i - edad_inicio))
-        else:
-            qx_ajustado.append(1.0)  # Forzar qx = 1 para edades fuera de la tabla
 
     resultados.insert(2, 'qx+t ajustado', qx_ajustado)
     resultados.set_index('Edad', inplace=True)
@@ -134,11 +175,11 @@ def tabla_gen(g, nombre_tabla):
         resultados.loc[i, 'lx'] = resultados.loc[i-1, 'lx'] * (1 - resultados.loc[i-1, 'qx+t ajustado'])
 
     resultados['dx'] = resultados['lx'] * resultados['qx+t ajustado']
-    
+
     print("Tabla generacional generada:")
     print(resultados.head(10))
     print(resultados.tail(10))
-    
+
     return resultados
 
     
@@ -544,58 +585,124 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, lista_int
 def funcion_incrementos_aritmeticos_variables(incrementos, saltos_incrementos, temporalidad=None, diferimiento=0):
     """
     Genera una lista de incrementos aritméticos (h_t) para cada año t.
-    - incrementos: Lista de cantidades a sumar (ej. [1000, 500] €).
-    - saltos_incrementos: Años donde cambian los incrementos (ej. [5]).
-    - temporalidad: Duración de la renta en años (None para vitalicia).
-    - diferimiento: Años antes de que comience la renta.
-    Retorna: Lista de h_t desde t=0.
+    - incrementos: Lista de cantidades a sumar (ej. [1000, 500] €). Cada valor representa cuánto se incrementa la renta.
+    - saltos_incrementos: Años donde cambian los incrementos (ej. [5]). Indica en qué año cambia el valor del incremento.
+    - temporalidad: Duración de la renta en años (None para vitalicia). Limita la duración total si no es vitalicia.
+    - diferimiento: Años antes de que comience la renta. Durante este período, los incrementos son 0.
+    Retorna: Lista de h_t desde t=0, donde cada h_t es el incremento aritmético aplicable en ese año.
     """
-    lista_ht = [0.0] * diferimiento  # h_t = 0 durante diferimiento
-    t_actual = diferimiento
-    max_anios = temporalidad + diferimiento if temporalidad is not None else 100 + diferimiento
-    max_anios = int(max_anios) + 1
+    # Durante el período de diferimiento, no hay renta, por lo que los incrementos son 0.
+    # Creamos una lista con 'diferimiento' elementos, todos 0.0.
+    lista_ht = [0.0] * diferimiento  # Ejemplo: si diferimiento=2, lista_ht = [0.0, 0.0]
 
+    # t_actual representa el año en el que estamos procesando.
+    # Comienza después del diferimiento, ya que los años anteriores ya los llenamos con 0.
+    t_actual = diferimiento  # Ejemplo: si diferimiento=2, t_actual comienza en 2 (año 3).
+
+    # Calculamos el número máximo de años que necesitamos procesar.
+    # Si la renta es temporal (temporalidad no es None), sumamos el diferimiento a la duración.
+    # Si es vitalicia (temporalidad=None), asumimos un máximo de 100 años después del diferimiento.
+    max_anios = temporalidad + diferimiento if temporalidad is not None else 100 + diferimiento
+    max_anios = int(max_anios) + 1  # +1 para incluir el último año (rango inclusivo).
+
+    # Ejemplo: temporalidad=10, diferimiento=2 → max_anios = 10 + 2 + 1 = 13 (años 0 a 12).
+    # Ejemplo: temporalidad=None, diferimiento=2 → max_anios = 100 + 2 + 1 = 103 (años 0 a 102).
+
+    # Iteramos sobre los años de cambio (saltos_incrementos) para asignar los incrementos correspondientes.
     for i, salto in enumerate(saltos_incrementos):
+        # Validamos que haya suficientes incrementos para los saltos proporcionados.
         if i >= len(incrementos):
             raise ValueError("Faltan incrementos para los saltos proporcionados.")
+
+        # Ajustamos el año de cambio considerando el diferimiento.
+        # Ejemplo: si salto=5 y diferimiento=2, el cambio ocurre en el año absoluto 5+2=7.
         salto_absoluto = salto + diferimiento
+
+        # Llenamos la lista desde t_actual hasta el año del cambio (salto_absoluto) o hasta max_anios, lo que sea menor.
         for t in range(t_actual, min(salto_absoluto, max_anios)):
-            lista_ht.append(incrementos[i])  # h_t = incremento en €
+            # Agregamos el incremento correspondiente al período actual (incrementos[i]).
+            # Ejemplo: incrementos=[1000, 500], i=0 → agrega 1000 para cada año en este rango.
+            lista_ht.append(incrementos[i])  # h_t = incremento en €.
+
+        # Actualizamos t_actual al año del cambio, para continuar desde ahí en la próxima iteración.
         t_actual = salto_absoluto
+
+        # Si ya llegamos al máximo de años, terminamos el bucle.
         if t_actual >= max_anios:
             break
 
-    # Completar con el último incremento
+    # Si aún no hemos llenado todos los años hasta max_anios, completamos con el último incremento.
     if t_actual < max_anios:
+        # Validamos que haya al menos un incremento para usar.
         if not incrementos:
             raise ValueError("No hay incrementos para completar los años restantes.")
+        # Llenamos los años restantes con el último incremento disponible.
         for t in range(t_actual, max_anios):
+            # Ejemplo: incrementos=[1000, 500] → usa 500 (el último) para los años restantes.
             lista_ht.append(incrementos[-1])
 
+    # Retornamos la lista completa de incrementos h_t para cada año t.
     return lista_ht
 
 def funcion_incrementos_variables(incrementos, saltos_incrementos, temporalidad=None, diferimiento=0):
-    lista_qt = [1.0] * diferimiento
-    t_actual = diferimiento
-    max_anios = temporalidad + diferimiento if temporalidad is not None else 100 + diferimiento
-    max_anios = int(max_anios) + 1
+    """
+    Genera una lista de factores de incremento geométricos (q_t) para cada año t.
+    - incrementos: Lista de tasas de incremento en % (ej. [0.02, 0.01] → 2%, 1%).
+    - saltos_incrementos: Años donde cambian los incrementos (ej. [5]).
+    - temporalidad: Duración de la renta en años (None para vitalicia).
+    - diferimiento: Años antes de que comience la renta.
+    Retorna: Lista de q_t desde t=0, donde q_t = 1 + tasa de incremento.
+    """
+    # Durante el período de diferimiento, no hay renta, por lo que los factores de incremento son 1.0 (sin cambio).
+    # Creamos una lista con 'diferimiento' elementos, todos 1.0.
+    lista_qt = [1.0] * diferimiento  # Ejemplo: si diferimiento=2, lista_qt = [1.0, 1.0]
 
+    # t_actual representa el año en el que estamos procesando.
+    # Comienza después del diferimiento.
+    t_actual = diferimiento  # Ejemplo: si diferimiento=2, t_actual comienza en 2 (año 3).
+
+    # Calculamos el número máximo de años que necesitamos procesar.
+    # Si la renta es temporal, sumamos el diferimiento a la duración.
+    # Si es vitalicia, asumimos un máximo de 100 años después del diferimiento.
+    max_anios = temporalidad + diferimiento if temporalidad is not None else 100 + diferimiento
+    max_anios = int(max_anios) + 1  # +1 para incluir el último año.
+
+    # Ejemplo: temporalidad=10, diferimiento=2 → max_anios = 13.
+    # Ejemplo: temporalidad=None, diferimiento=2 → max_anios = 103.
+
+    # Iteramos sobre los años de cambio (saltos_incrementos) para asignar los factores de incremento.
     for i, salto in enumerate(saltos_incrementos):
+        # Validamos que haya suficientes incrementos para los saltos proporcionados.
         if i >= len(incrementos):
             raise ValueError("Faltan incrementos para los saltos proporcionados.")
+
+        # Ajustamos el año de cambio considerando el diferimiento.
         salto_absoluto = salto + diferimiento
+
+        # Llenamos la lista desde t_actual hasta el año del cambio o hasta max_anios.
         for t in range(t_actual, min(salto_absoluto, max_anios)):
+            # Calculamos el factor de incremento: q_t = 1 + tasa de incremento.
+            # Ejemplo: incrementos=[0.02, 0.01], i=0 → q_t = 1 + 0.02 = 1.02.
             lista_qt.append(1 + incrementos[i])
+
+        # Actualizamos t_actual al año del cambio.
         t_actual = salto_absoluto
+
+        # Si ya llegamos al máximo de años, terminamos el bucle.
         if t_actual >= max_anios:
             break
 
+    # Si aún no hemos llenado todos los años hasta max_anios, completamos con el último factor.
     if t_actual < max_anios:
+        # Validamos que haya al menos un incremento para usar.
         if not incrementos:
             raise ValueError("No hay incrementos para completar los años restantes.")
+        # Llenamos los años restantes con el último factor disponible.
         for t in range(t_actual, max_anios):
+            # Ejemplo: incrementos=[0.02, 0.01] → usa 1 + 0.01 = 1.01.
             lista_qt.append(1 + incrementos[-1])
 
+    # Retornamos la lista completa de factores q_t para cada año t.
     return lista_qt
 
 def interpolar_lx_general(tabla_anual, edad_renta, diferimiento, duracion, fracciones_por_anio=1):
@@ -604,58 +711,107 @@ def interpolar_lx_general(tabla_anual, edad_renta, diferimiento, duracion, fracc
     
     Args:
         tabla_anual (pd.DataFrame): Tabla generacional con columnas 'x+t', 'lx'.
+            # 'x+t': Edad absoluta (edad inicial + tiempo transcurrido).
+            # 'lx': Número de sobrevivientes a esa edad (de una población inicial).
         edad_renta (int): Edad inicial para calcular k p_x.
+            # Ejemplo: Si edad_renta=50, calculamos la probabilidad de que alguien de 50 años sobreviva a edades futuras.
         diferimiento (int): Años de diferimiento (0 si renta inmediata).
+            # Ejemplo: Si diferimiento=2, los pagos comienzan 2 años después de edad_renta.
         duracion (int): Número de años a interpolar.
+            # Ejemplo: Si duracion=10, generamos datos para 10 años (de k=0 a k=10).
         fracciones_por_anio (int): Fracciones por año (1, 4, 12, etc.).
+            # Ejemplo: Si fracciones_por_anio=12, calculamos valores mensuales (12 fracciones por año).
     
     Returns:
         pd.DataFrame: Tabla con columnas k (edad absoluta), t (tiempo desde edad_renta), k p_x.
+            # 'k': Edad absoluta, incluyendo fracciones (ej. 50.5 para medio año).
+            # 't': Tiempo transcurrido desde edad_renta, incluyendo fracciones.
+            # 'k p_x': Probabilidad de que alguien de edad_renta sobreviva hasta el tiempo t.
     """
+    # Lista para almacenar los resultados de cada fracción de cada año.
     resultados = []
+
+    # Obtenemos la edad máxima disponible en la tabla generacional.
+    # Esto nos ayuda a saber hasta dónde podemos interpolar sin exceder los datos.
     max_edad = tabla_anual['x+t'].max()
-    
-    # Edad donde comienzan los pagos
+    # Ejemplo: Si tabla_anual tiene datos hasta x+t=110, max_edad=110.
+
+    # Calculamos la edad en la que comienzan los pagos.
+    # Si hay diferimiento, los pagos empiezan después de esos años.
     edad_inicio = edad_renta + diferimiento
-    
-    # Obtener lx inicial para edad_renta
+    # Ejemplo: edad_renta=50, diferimiento=2 → edad_inicio=52 (los pagos comienzan a los 52 años).
+
+    # Obtenemos el valor de lx inicial (número de sobrevivientes a la edad_renta).
+    # Esto será el denominador para calcular k p_x.
     if edad_renta not in tabla_anual['x+t'].values:
+        # Validamos que la edad inicial esté en la tabla, si no, lanzamos un error.
         raise ValueError(f"La edad inicial {edad_renta} no está en la tabla generacional.")
     lx_inicial = tabla_anual.loc[tabla_anual['x+t'] == edad_renta, 'lx'].iloc[0]
-    
-    # Generar tabla para cada año y fracción
+    # Ejemplo: Si edad_renta=50 y tabla_anual tiene lx=95000 para x+t=50, entonces lx_inicial=95000.
+
+    # Iteramos sobre cada año del período de duración (de k=0 a k=duracion).
     for k_offset in range(duracion + 1):
+        # k_offset representa el desplazamiento en años desde edad_inicio.
+        # Calculamos la edad actual sumando el desplazamiento a edad_inicio.
         edad = edad_inicio + k_offset
-        t = edad - edad_renta  # Tiempo transcurrido desde edad_renta
-        
-        # Obtener lx para la edad actual
+        # Ejemplo: edad_inicio=52, k_offset=0 → edad=52; k_offset=1 → edad=53.
+
+        # Calculamos el tiempo transcurrido desde edad_renta (t).
+        # Esto incluye el diferimiento.
+        t = edad - edad_renta  # Tiempo transcurrido desde edad_renta.
+        # Ejemplo: edad=52, edad_renta=50 → t=52-50=2.
+
+        # Obtenemos lx para la edad actual (número de sobrevivientes a esa edad).
         if edad > max_edad:
+            # Si la edad excede la máxima disponible en la tabla, asumimos que no hay sobrevivientes.
             lx = 0
         else:
+            # Si la edad está dentro del rango, obtenemos lx directamente de la tabla.
             lx = tabla_anual.loc[tabla_anual['x+t'] == edad, 'lx'].values[0]
-        
-        # Obtener lx para la siguiente edad
+        # Ejemplo: edad=52, tabla_anual tiene lx=94000 para x+t=52 → lx=94000.
+
+        # Obtenemos lx para la siguiente edad (para interpolar entre años).
         if edad + 1 > max_edad:
+            # Si la siguiente edad excede la máxima, asumimos que no hay sobrevivientes.
             lx_next = 0
         else:
+            # Si está dentro del rango, obtenemos lx de la siguiente edad.
             lx_next = tabla_anual.loc[tabla_anual['x+t'] == edad + 1, 'lx'].values[0]
-        
-        # Interpolación para cada fracción
+        # Ejemplo: edad=52, tabla_anual tiene lx=93000 para x+t=53 → lx_next=93000.
+
+        # Iteramos sobre cada fracción del año (por ejemplo, 12 fracciones si es mensual).
         for j in range(fracciones_por_anio):
+            # Calculamos la fracción del año.
+            # Ejemplo: fracciones_por_anio=12, j=0 → fraccion=0/12=0; j=6 → fraccion=6/12=0.5.
             fraccion = j / fracciones_por_anio
-            lx_interp = lx + (lx_next - lx) * fraccion
+
+            # Interpolamos lx entre lx (inicio del año) y lx_next (fin del año) usando una interpolación lineal.
+            # Fórmula: lx_interp = lx + (lx_next - lx) * fraccion.
+            lx_interp = lx - (lx_next - lx) * fraccion
+            # Ejemplo: lx=94000, lx_next=93000, fraccion=0.5 → lx_interp = 94000 + (93000-94000)*0.5 = 93500.
+
+            # Calculamos k p_x: probabilidad de supervivencia desde edad_renta hasta el tiempo t+fraccion.
+            # Fórmula: k p_x = lx_interp / lx_inicial (si lx_inicial != 0).
             k_p_x = lx_interp / lx_inicial if lx_inicial != 0 else 0
-            
+            # Ejemplo: lx_interp=93500, lx_inicial=95000 → k_p_x = 93500/95000 ≈ 0.9842.
+
+            # Agregamos los datos a los resultados.
             resultados.append({
-                'k': edad + fraccion,  # Edad absoluta
-                't': t + fraccion,     # Tiempo desde edad_renta
-                'k p_x': k_p_x
+                'k': edad + fraccion,  # Edad absoluta, incluyendo fracciones.
+                't': t + fraccion,     # Tiempo desde edad_renta, incluyendo fracciones.
+                'k p_x': k_p_x         # Probabilidad de supervivencia.
             })
-    
+            # Ejemplo: edad=52, fraccion=0.5 → k=52.5, t=2.5, k_p_x=0.9842.
+
+    # Convertimos los resultados a un DataFrame para facilitar su uso.
     tabla = pd.DataFrame(resultados)
+
+    # Imprimimos las primeras y últimas 10 filas para depuración.
     print("Valores de tabla interpolada:")
-    print(tabla.head(10))
-    print(tabla.tail(10))
+    print(tabla.head(10))  # Primeras 10 filas.
+    print(tabla.tail(10))  # Últimas 10 filas.
+
+    # Retornamos la tabla con las columnas 'k', 't', y 'k p_x'.
     return tabla
     
 def generar_tabla_flujos(tabla_generacion, edad_renta, diferimiento, tipo_renta, temporalidad, fracciones_por_anio=1):
@@ -664,107 +820,265 @@ def generar_tabla_flujos(tabla_generacion, edad_renta, diferimiento, tipo_renta,
     - k representa el año actuarial (inicia en diferimiento, e.g., 17).
     - t y t_relativo reflejan los subperíodos fraccionados.
     - j representa el subperíodo dentro del año (0 a 11 para prepagable, 1 a 12 para pospagable).
+    
+    Args:
+        tabla_generacion (pd.DataFrame): Tabla generacional con datos de mortalidad.
+            # Contiene columnas como 'x+t' (edad absoluta) y 'lx' (número de sobrevivientes).
+            # Usada para calcular la probabilidad de supervivencia k p_x.
+        edad_renta (int): Edad inicial del beneficiario para calcular k p_x.
+            # Ejemplo: Si edad_renta=50, calculamos probabilidades de supervivencia desde los 50 años.
+        diferimiento (int): Años antes de que comience la renta (0 si es inmediata).
+            # Ejemplo: Si diferimiento=2, la renta comienza 2 años después de edad_renta.
+        tipo_renta (str): Tipo de renta ('prepagable' o 'pospagable').
+            # Prepagable: Pagos al inicio de cada subperíodo (t=17.0, 17.0833, ...).
+            # Pospagable: Pagos al final de cada subperíodo (t=17.0833, 17.1667, ...).
+        temporalidad (int or None): Duración de la renta en años (None para vitalicia).
+            # Ejemplo: temporalidad=10 → renta por 10 años; None → renta vitalicia.
+        fracciones_por_anio (int): Número de pagos por año (1, 2, 4, 12, etc.).
+            # Ejemplo: fracciones_por_anio=12 → pagos mensuales (12 fracciones por año).
+    
+    Returns:
+        pd.DataFrame: Tabla con columnas k, t, t_relativo, j, k p_x.
+            # 'k': Año actuarial (entero, comienza en diferimiento).
+            # 't': Tiempo absoluto (incluye fracciones, ej. 17.0833).
+            # 't_relativo': Tiempo relativo al inicio de la renta (t - diferimiento).
+            # 'j': Subperíodo dentro del año (0 a 11 para prepagable, 1 a 12 para pospagable).
+            # 'k p_x': Probabilidad de supervivencia desde edad_renta hasta el tiempo t.
     """
+    # Definimos omega como la edad máxima teórica (límite de vida).
+    # En tablas de mortalidad, suele ser 120 años, lo que representa el máximo de edad que consideramos.
     omega = 120
+
+    # Determinamos el número máximo de años para los que generaremos flujos.
     if temporalidad is None:
+        # Si la renta es vitalicia (temporalidad=None), calculamos hasta omega - edad_renta - 1.
+        # Restamos 1 para no exceder la edad máxima (omega).
+        # Ejemplo: edad_renta=50, omega=120 → max_anios = 120 - 50 - 1 = 69 años.
         max_anios = omega - edad_renta - 1
     else:
+        # Si la renta es temporal, usamos la duración especificada en temporalidad.
+        # Ejemplo: temporalidad=10 → max_anios = 10 años.
         max_anios = temporalidad
-    
+
+    # Creamos un DataFrame vacío con las columnas necesarias para almacenar los flujos.
+    # Las columnas representan:
+    # - k: Año actuarial (entero).
+    # - t: Tiempo absoluto (puede incluir fracciones).
+    # - t_relativo: Tiempo relativo al inicio de la renta.
+    # - j: Subperíodo dentro del año.
+    # - k p_x: Probabilidad de supervivencia.
     tabla = pd.DataFrame(columns=['k', 't', 't_relativo', 'j', 'k p_x'])
+
+    # Índice para llenar las filas del DataFrame de forma incremental.
     idx = 0
-    
+
+    # Iteramos sobre cada año de la duración de la renta (de 0 a max_anios-1).
     for anio in range(max_anios):
-        k = (diferimiento or 0) + anio  # k inicia en 17
+        # Calculamos k, el año actuarial, que comienza en el año de diferimiento.
+        # 'anio' es el desplazamiento desde el inicio de la renta.
+        # Ejemplo: Si diferimiento=2, entonces anio=0 → k=2, anio=1 → k=3.
+        k = (diferimiento or 0) + anio  # k inicia en diferimiento (ej. 17).
+        # Nota: Usamos 'diferimiento or 0' para manejar el caso en que diferimiento=None (lo tratamos como 0).
+
+        # Iteramos sobre cada fracción dentro del año (según fracciones_por_anio).
+        # Ejemplo: Si fracciones_por_anio=12, iteramos sobre f=0, 1, ..., 11 (para pagos mensuales).
         for f in range(fracciones_por_anio):
+            # Determinamos el tiempo t y el subperíodo j según el tipo de renta.
             if tipo_renta.lower() == 'prepagable':
-                t = k + f / fracciones_por_anio  # 17.0000, 17.0833, ..., 17.9167
-                j = f  # 0, 1, ..., 11
+                # Para rentas prepagables, los pagos ocurren al inicio de cada subperíodo.
+                # t se calcula sumando la fracción del año al año actuarial k.
+                # Ejemplo: k=17, fracciones_por_anio=12, f=0 → t=17.0; f=1 → t=17.0833.
+                t = k + f / fracciones_por_anio  # 17.0000, 17.0833, ..., 17.9167.
+                # j es simplemente el número de la fracción (subperíodo).
+                j = f  # 0, 1, ..., 11.
             else:  # pospagable
-                t = k + (f + 1) / fracciones_por_anio  # 17.0833, 17.1667, ..., 18.0000
-                j = f + 1  # 1, 2, ..., 12
-            
-            # Ajustar el filtro para prepagable
+                # Para rentas pospagables, los pagos ocurren al final de cada subperíodo.
+                # t se calcula sumando (f+1)/fracciones_por_anio para que el pago sea al final del período.
+                # Ejemplo: k=17, fracciones_por_anio=12, f=0 → t=17.0833; f=11 → t=18.0.
+                t = k + (f + 1) / fracciones_por_anio  # 17.0833, 17.1667, ..., 18.0000.
+                # j es el subperíodo, ajustado para que vaya de 1 a fracciones_por_anio.
+                j = f + 1  # 1, 2, ..., 12.
+
+            # Filtramos los períodos que ocurren antes del inicio de la renta.
+            # Esto asegura que no generemos flujos para tiempos antes de que comience la renta.
             if tipo_renta.lower() == 'prepagable':
+                # Para prepagable, excluimos tiempos estrictamente menores al diferimiento.
+                # Ejemplo: Si diferimiento=2, no queremos t<2 (antes de que comience la renta).
+                # Un pago en t=2.0 (inicio del período) es válido.
                 if t < (diferimiento or 0):
                     continue
             else:
+                # Para pospagable, excluimos tiempos menores o iguales al diferimiento.
+                # Ejemplo: Si diferimiento=2, no queremos t<=2.
+                # El primer pago sería en t=2.0833 (para fracciones_por_anio=12).
                 if t <= (diferimiento or 0):
                     continue
-            
+
+            # Calculamos t_relativo: el tiempo relativo al inicio de la renta.
+            # Restamos el diferimiento a t para obtener el tiempo transcurrido desde el inicio de los pagos.
+            # Ejemplo: t=17.0833, diferimiento=2 → t_relativo = 17.0833 - 2 = 15.0833.
             t_relativo = t - (diferimiento or 0)
+
+            # Calculamos k p_x: probabilidad de que una persona de edad_renta sobreviva hasta el tiempo t.
+            # La función tpx (no definida aquí) calcula esta probabilidad usando la tabla generacional.
+            # tpx interpola lx si es necesario para fracciones de año.
             val_medio = tpx(edad_renta, t, tabla_generacion, fracciones_por_anio)
+            # Ejemplo: edad_renta=50, t=17.0833 → val_medio = probabilidad de sobrevivir de 50 a 67.0833 años.
+
+            # Agregamos la fila al DataFrame con los valores calculados.
+            # Cada fila representa un momento de pago y su probabilidad de supervivencia asociada.
             tabla.loc[idx] = [k, t, t_relativo, j, val_medio]
-            idx += 1
-    
-    # Ordenar la tabla por k, t para asegurar el orden correcto
+            # Ejemplo: [17, 17.0833, 15.0833, 1, 0.95].
+            idx += 1  # Incrementamos el índice para la siguiente fila.
+
+    # Ordenamos la tabla por las columnas 'k' y 't' para asegurar que los datos estén en orden cronológico.
+    # Esto es importante para cálculos posteriores que dependan del orden de los flujos.
     tabla = tabla.sort_values(by=['k', 't']).reset_index(drop=True)
+
+    # Retornamos la tabla completa con los flujos actuariales.
     return tabla
 
 def calcular_ck(t_relativo, k, tipo_renta, capital, factores, fracciones_por_anio):
     """
     Calcula el valor de C_k para un tiempo relativo dado.
     Soporta todas: prepagable/pospagable, aritmético/geométrico.
+    
+    Args:
+        t_relativo (float): Tiempo relativo al inicio de la renta (t - diferimiento).
+            # Ejemplo: Si t=17.0833 y diferimiento=2, t_relativo=15.0833.
+        k (float or int): Año actuarial (entero, comienza en diferimiento).
+            # Ejemplo: k=17 para el año 17.
+        tipo_renta (str): Tipo de renta ('prepagable' o 'pospagable').
+            # Prepagable: Pagos al inicio de cada subperíodo.
+            # Pospagable: Pagos al final de cada subperíodo.
+        capital (float): Cuantía inicial de la renta.
+            # Ejemplo: capital=15000 → cuantía inicial de 15,000 €.
+        factores (dict): Diccionario con parámetros de incremento.
+            # 'tipo': 'geometrico', 'aritmetico', o None (sin incremento).
+            # 'q': Factor geométrico fijo (ej. q=1.02 para 2% de incremento).
+            # 'h': Incremento aritmético fijo (ej. h=500 para 500 €).
+            # 'lista_factores': Lista de factores geométricos variables.
+            # 'saltos_factores': Años donde cambian los factores.
+            # 'lista_incrementos': Lista de incrementos aritméticos variables.
+            # 'saltos_incrementos': Años donde cambian los incrementos.
+            # 'diferimiento': Años de diferimiento (para pospagable).
+        fracciones_por_anio (int): Número de pagos por año (1, 2, 4, 12, etc.).
+            # Ejemplo: fracciones_por_anio=12 → pagos mensuales.
+    
+    Returns:
+        float: Valor de C_k ajustado por incrementos y fracciones por año.
+            # Ejemplo: Si capital=15000 y fracciones_por_anio=12, cada pago es 15000/12=1250 € (sin incremento).
     """
-    # Asegurar que k y t_relativo sean tratados como valores numéricos
-    k = int(float(k))  # Convertir k a entero
-    t_relativo = float(t_relativo)  # Asegurar que t_relativo sea float
-    
-    # Determinar el año actuarial relativo al inicio de los pagos
+    # Aseguramos que k y t_relativo sean tratados como valores numéricos.
+    # k debe ser entero (año actuarial), mientras que t_relativo puede incluir fracciones.
+    k = int(float(k))  # Convertir k a entero.
+    # Ejemplo: k=17.0 → k=17.
+    t_relativo = float(t_relativo)  # Asegurar que t_relativo sea float.
+    # Ejemplo: t_relativo="15.0833" → t_relativo=15.0833.
+
+    # Determinamos el año actuarial relativo al inicio de los pagos.
+    # Esto nos ayuda a aplicar los incrementos en el momento correcto.
     if tipo_renta.lower() == 'pospagable':
-        diferimiento = int(float(factores.get('diferimiento', 0)))  # 17
-        anio_actuarial = k - diferimiento  # Ajuste: quitar el -1
+        # Para rentas pospagables, ajustamos k restando el diferimiento.
+        # El diferimiento está en el diccionario factores.
+        diferimiento = int(float(factores.get('diferimiento', 0)))  # 17.
+        # Ejemplo: Si k=17 y diferimiento=2, anio_actuarial=17-2=15.
+        anio_actuarial = k - diferimiento  # Ajuste: quitar el -1.
     else:
+        # Para rentas prepagables, usamos t_relativo directamente.
+        # Como t_relativo ya está ajustado por el diferimiento, lo convertimos a entero.
         anio_actuarial = int(t_relativo)
-    
+        # Ejemplo: t_relativo=15.0833 → anio_actuarial=15.
+
+    # Comprobamos el tipo de incremento especificado en factores.
     if factores['tipo'] == 'geometrico':
+        # Incremento geométrico: C_k se multiplica por un factor acumulativo (q^t).
         if 'q' in factores:
+            # Caso 1: Incremento geométrico fijo (q es constante).
+            # Ejemplo: q=1.02 → 2% de incremento anual.
             if tipo_renta.lower() == 'pospagable':
+                # Para pospagable, aplicamos el factor q elevado al año actuarial.
+                # Usamos max(0, anio_actuarial) para evitar exponentes negativos.
+                # Ejemplo: capital=15000, q=1.02, anio_actuarial=1 → C_k = 15000 * (1.02)^1.
                 return (capital * (factores['q'] ** max(0, anio_actuarial))) / fracciones_por_anio
             else:
+                # Para prepagable, usamos t_relativo directamente.
+                # Ejemplo: t_relativo=1.25, q=1.02 → C_k = 15000 * (1.02)^1.25.
                 return (capital * (factores['q'] ** t_relativo)) / fracciones_por_anio
         elif 'lista_factores' in factores and 'saltos_factores' in factores:
+            # Caso 2: Incremento geométrico variable (lista de factores).
             lista_factores = factores['lista_factores']
-            # Convertir saltos_factores a enteros
+            # Ejemplo: lista_factores=[1.02, 1.01] → 2% y luego 1%.
+            # Convertimos saltos_factores a enteros para asegurar consistencia.
             saltos_factores = [int(float(s)) for s in factores['saltos_factores']]
-            
-            # Generar lista de factores hasta anio_actuarial
+            # Ejemplo: saltos_factores=[5] → el factor cambia en el año 5.
+
+            # Generamos una lista de factores hasta anio_actuarial.
             factores_completos = []
             t_actual = 0
-            max_t = max(0, anio_actuarial)  # Número de años con incremento
+            max_t = max(0, anio_actuarial)  # Número de años con incremento.
+            # Ejemplo: anio_actuarial=6 → max_t=6.
+            
+            # Iteramos sobre los saltos para construir la lista de factores.
             for i, salto in enumerate(saltos_factores):
+                # Si no hay más factores, salimos del bucle.
                 if i >= len(lista_factores):
                     break
+                # Si ya llegamos al máximo tiempo, salimos.
                 if t_actual >= max_t:
                     break
+                # Calculamos cuántos años aplica el factor actual.
                 num_repeticiones = max(0, int(salto - t_actual))
+                # Si el salto excede max_t, ajustamos el número de repeticiones.
                 if salto > max_t:
                     num_repeticiones = max(0, int(max_t - t_actual))
+                # Agregamos el factor correspondiente el número de veces necesario.
                 factores_completos.extend([lista_factores[i]] * num_repeticiones)
+                # Ejemplo: salto=5, t_actual=0, num_repeticiones=5 → [1.02, 1.02, 1.02, 1.02, 1.02].
                 t_actual = salto
-            
-            # No añadir más factores después de max_t
+
+            # Calculamos C_k según anio_actuarial.
             if anio_actuarial <= 0:
-                return capital / fracciones_por_anio  # Primer año sin incremento
+                # Si anio_actuarial <= 0, no hay incremento (primer año).
+                # Ejemplo: capital=15000, fracciones_por_anio=12 → C_k = 15000/12 = 1250.
+                return capital / fracciones_por_anio  # Primer año sin incremento.
             else:
+                # Multiplicamos todos los factores para obtener el factor acumulado.
                 factor_acumulado = math.prod(factores_completos)
+                # Ejemplo: factores_completos=[1.02, 1.02, ..., 1.01] → factor_acumulado = 1.02^5 * 1.01.
+                # C_k = capital * factor_acumulado / fracciones_por_anio.
                 return (capital * factor_acumulado) / fracciones_por_anio
         else:
+            # Si no se proporcionan los parámetros necesarios, lanzamos un error.
             raise ValueError("Para tipo 'geometrico', se requiere 'q' o 'lista_factores' con 'saltos_factores'")
     elif factores['tipo'] == 'aritmetico':
+        # Incremento aritmético: C_k se incrementa sumando una cantidad (h).
         if 'h' in factores:
+            # Caso 1: Incremento aritmético fijo (h es constante).
+            # Ejemplo: h=500 → se suman 500 € por año.
             if tipo_renta.lower() == 'pospagable':
+                # Para pospagable, aplicamos h según el año actuarial.
+                # Ejemplo: capital=15000, h=500, anio_actuarial=1 → C_k = (15000 + 1*500).
                 return (capital + (max(0, anio_actuarial) * factores['h'])) / fracciones_por_anio
             else:
+                # Para prepagable, usamos t_relativo directamente.
+                # Ejemplo: t_relativo=1.25, h=500 → C_k = (15000 + 1.25*500).
                 return (capital + (t_relativo * factores['h'])) / fracciones_por_anio
         elif 'lista_incrementos' in factores and 'saltos_incrementos' in factores:
+            # Caso 2: Incremento aritmético variable (lista de incrementos).
             lista_incrementos = factores['lista_incrementos']
-            # Convertir saltos_incrementos a enteros
+            # Ejemplo: lista_incrementos=[500, 300] → 500 € y luego 300 €.
+            # Convertimos saltos_incrementos a enteros.
             saltos_incrementos = [int(float(s)) for s in factores['saltos_incrementos']]
-            
+            # Ejemplo: saltos_incrementos=[5] → el incremento cambia en el año 5.
+
+            # Generamos una lista de incrementos hasta anio_actuarial.
             incrementos_completos = []
             t_actual = 0
             max_t = max(0, anio_actuarial)
+            # Ejemplo: anio_actuarial=6 → max_t=6.
+            
+            # Iteramos sobre los saltos para construir la lista de incrementos.
             for i, salto in enumerate(saltos_incrementos):
                 if i >= len(lista_incrementos):
                     break
@@ -774,17 +1088,26 @@ def calcular_ck(t_relativo, k, tipo_renta, capital, factores, fracciones_por_ani
                 if salto > max_t:
                     num_repeticiones = max(0, int(max_t - t_actual))
                 incrementos_completos.extend([lista_incrementos[i]] * num_repeticiones)
+                # Ejemplo: salto=5, t_actual=0 → [500, 500, 500, 500, 500].
                 t_actual = salto
-            
+
+            # Calculamos C_k según anio_actuarial.
             if anio_actuarial <= 0:
-                return capital / fracciones_por_anio  # Primer año sin incremento
+                # Si anio_actuarial <= 0, no hay incremento.
+                return capital / fracciones_por_anio  # Primer año sin incremento.
             else:
+                # Sumamos todos los incrementos para obtener el incremento acumulado.
                 incremento_acumulado = sum(incrementos_completos)
+                # Ejemplo: incrementos_completos=[500, 500, ..., 300] → incremento_acumulado = 500*5 + 300.
+                # C_k = (capital + incremento_acumulado) / fracciones_por_anio.
                 return (capital + incremento_acumulado) / fracciones_por_anio
         else:
+            # Si no se proporcionan los parámetros necesarios, lanzamos un error.
             raise ValueError("Para tipo 'aritmetico', se requiere 'h' o 'lista_incrementos' con 'saltos_incrementos'")
     else:
-        return capital / fracciones_por_anio  # Sin incremento, capital dividido por fracciones por año
+        # Si no hay incremento (factores['tipo'] es None), devolvemos el capital dividido por las fracciones.
+        # Ejemplo: capital=15000, fracciones_por_anio=12 → C_k = 15000/12 = 1250.
+        return capital / fracciones_por_anio  # Sin incremento, capital dividido por fracciones por año.
 
 def calcular_factor_descuento(k, tipo_renta, interes, lista_intereses=None, t=None, fracciones_por_anio=1):
     """
