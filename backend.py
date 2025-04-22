@@ -77,7 +77,7 @@ def tabla_gen(g, nombre_tabla, w_male=0.5, w_female=0.5):
 
     # Obtener el año base
     anio_base = generacion(g, nombre_tabla)
-    # Calcular la edad inicial (x+t) en el año base
+    # Calcular la edad inicial (x+t) en el año base (2000 o 2012) - g(año de nacimiento)
     edad_inicio = anio_base - g
 
     # Función auxiliar para cargar y procesar una tabla base
@@ -86,50 +86,50 @@ def tabla_gen(g, nombre_tabla, w_male=0.5, w_female=0.5):
         df = hojas[tabla_nombre].copy()
 
         # Asegurarnos de que el índice sea 'x+t' o similar
-        if df.index.name is None or 'x+t' not in df.index.name.lower():
-            index_col = None
-            for col in df.columns:
-                if 'x+t' in col.lower():
-                    index_col = col
-                    break
-            if index_col:
-                df.set_index(index_col, inplace=True)
-            else:
-                raise ValueError(f"No se encontró una columna de índice 'x+t' en la tabla {tabla_nombre}.")
-
-        # Imprimir las columnas para depurar
-        print(f"Columnas de la tabla {tabla_nombre}: {df.columns.tolist()}")
-        print(f"Primeros valores de la tabla de mortalidad {tabla_nombre}:")
-        print(df.head(10))
+        #Verifica si DtaFrame tiene un índice con nomnbre 'x+t'o si tiene nombre de columna 'x+t' .lower() convierte a minúsculas y verifica si esta presente
+        if df.index.name is None or 'x+t' not in df.index.name.lower(): 
+            index_col = None # Inicializa la variable index_col como None. Almacena el nombre de la columna que contiene 'x+t'.
+            for col in df.columns: #iterar sobre las columnas del DataFrame df.
+                if 'x+t' in col.lower(): # Verifica si 'x+t' está en el nombre de la columna (en minúsculas).
+                    index_col = col # Si se encuentra una columna con 'x+t', almacena su nombre en index_col.
+                    break # Sale del bucle una vez que encuentra la primera coincidencia.
+            if index_col: # Si se encontró una columna con 'x+t'.
+                df.set_index(index_col, inplace=True) # Establece la columna encontrada como índice del DataFrame.
+            else: # Si no se encontró ninguna columna con 'x+t'.
+                raise ValueError(f"No se encontró una columna de índice 'x+t' en la tabla {tabla_nombre}.") ## Si no se encuentra, lanza un error.
 
         # Renombrar columnas según el tipo de tabla
-        if len(df.columns) == 2:  # Tablas PERM2000/PERF2000 y PER_2020_Indiv_2Orden
-            if '2Orden' in tabla_nombre:
-                df.columns = ['qx', 'mejora']
+        if len(df.columns) == 2:  # Tablas PERM2000/PERF2000 y PER_2020_Indiv_2Orden. Si las tablas tienen 2 columnas. 
+            if '2Orden' in tabla_nombre: #Busca si '2Orden' está en el nombre de la tabla.
+                df.columns = ['qx', 'mejora'] # Renombra las columnas a 'qx' y 'mejora'.
             else:
-                df.columns = ['qx', 'mejora']
-        elif len(df.columns) == 4:  # Tablas PER_2020_Indiv_1Orden
-            df = df.iloc[:, [1, 3]]  # Seleccionamos 'qx+t, tabla base' y 'λx+t'
-            df.columns = ['qx', 'mejora']
+                df.columns = ['qx', 'mejora'] # Renombra las columnas a 'qx' y 'mejora'.
+        elif len(df.columns) == 4:  # Tablas PER_2020_Indiv_1Orden. Si las tablas tienen 4 columnas.
+            df = df.iloc[:, [1, 3]]  # Seleccionamos 'qx+t, tabla base' y 'λx+t'. iloc[:, [1, 3]] selecciona las columnas 1 y 3 del DataFrame y odas las filas [:].
+            df.columns = ['qx', 'mejora'] # Renombra las columnas a 'qx' y 'mejora'.
         else:
-            raise ValueError(f"La tabla {tabla_nombre} tiene un número inesperado de columnas: {len(df.columns)}")
+            raise ValueError(f"La tabla {tabla_nombre} tiene un número inesperado de columnas: {len(df.columns)}") ## Si no tiene 2 o 4 columnas, lanza un error.
 
-        df.index.name = 'edad'
+        df.index.name = 'edad' # Renombrar el índice a 'edad'
 
         # Generar qx+t ajustado
-        qx_ajustado = []
-        for i in range(edad_inicio, omega + 1):
-            if i in df.index:
+        qx_ajustado = [] #Generamos lista vacia qx_ajustado, donde se almacenara la probabilidad de muerte ajustada.
+        for i in range(edad_inicio, omega + 1): #Iteramos desde edad_inicio hasta omega + 1. Es decir, desde la edad inicial hasta 120 años.
+            if i in df.index: #Verifica si la edad i está en el índice del DataFrame df.
                 qx_ajustado.append(q_x(df.loc[i, 'qx'], df.loc[i, 'mejora'], i - edad_inicio))
+                #.append añade a la lista qx_ajustado el resultado de la función q_x, que calcula la probabilidad de muerte ajustada.
+                #df.loc[i, 'qx'] obtiene la probabilidad de muerte qx para la edad i.
+                #df.loc[i, 'mejora'] obtiene el factor de mejora para la edad i.
+                #i - edad_inicio calcula el tiempo t desde la edad inicial.
             else:
                 qx_ajustado.append(1.0)  # Forzar qx = 1 para edades fuera de la tabla
-
-        return qx_ajustado
+                #.append añade a la lista qx_ajustado el valor 1.0 para edades que no están en la tabla.
+        return qx_ajustado # Devuelve la lista de probabilidades de muerte ajustadas.
 
     # Parámetros
     omega = 120
-    x_mas_t_list = list(range(edad_inicio, omega + 1))
-    edad_t = list(range(0, len(x_mas_t_list)))
+    x_mas_t_list = list(range(edad_inicio, omega + 1)) # Lista de edades desde edad_inicio hasta omega + 1.
+    edad_t = list(range(0, len(x_mas_t_list))) ## Lista de edades desde 0 hasta la longitud de x_mas_t_list.
 
     # Procesar tabla según el nombre
     if nombre_tabla in [
@@ -138,68 +138,64 @@ def tabla_gen(g, nombre_tabla, w_male=0.5, w_female=0.5):
         "PERF_2020_Indiv_2Orden", "PERF_2020_Indiv_1Orden",
         "PERM_2020_Colectivos_2Orden", "PERM_2020_Colectivos_1Orden",
         "PERF_2020_Colectivos_2Orden", "PERF_2020_Colectivos_1Orden"
-    ]:
+    ]: #Buscamos si el nombre de la tabla está en la lista de tablas estándar.
         # Tablas estándar
-        qx_ajustado = procesar_tabla_base(nombre_tabla)
+        qx_ajustado = procesar_tabla_base(nombre_tabla) # Procesar la tabla base según el nombre. Ademas, se le asigna a qx_ajustado el resultado de la función procesar_tabla_base(nombre_tabla).
     elif nombre_tabla == "PER_2020_Indiv_1Orden_UNISEX":
         # Combinar PERM_2020_Indiv_1Orden y PERF_2020_Indiv_1Orden
-        qx_male = procesar_tabla_base("PERM_2020_Indiv_1Orden")
-        qx_female = procesar_tabla_base("PERF_2020_Indiv_1Orden") 
+        qx_male = procesar_tabla_base("PERM_2020_Indiv_1Orden") #Traemos las probabilidades de muerte ajustadas para hombres.
+        qx_female = procesar_tabla_base("PERF_2020_Indiv_1Orden") #Traemos las probabilidades de muerte ajustadas para mujeres.
         # Promedio ponderado
         qx_ajustado = [w_male * qm + w_female * qf for qm, qf in zip(qx_male, qx_female)] #qx_male = [0.01, 0.02, 0.0] qx_female = [0.05, 0.02, 0.0] qx_ = [0.01, 0.05] 
     elif nombre_tabla == "PER_2020_Colec_1Orden_UNISEX":
         # Combinar PERM_2020_Colectivos_1Orden y PERF_2020_Colectivos_1Orden
-        qx_male = procesar_tabla_base("PERM_2020_Colectivos_1Orden")
-        qx_female = procesar_tabla_base("PERF_2020_Colectivos_1Orden")
-        qx_ajustado = [w_male * qm + w_female * qf for qm, qf in zip(qx_male, qx_female)]
+        qx_male = procesar_tabla_base("PERM_2020_Colectivos_1Orden") #Traemos las probabilidades de muerte ajustadas para hombres de la tabla PERM_2020_Colectivos_1Orden.
+        qx_female = procesar_tabla_base("PERF_2020_Colectivos_1Orden") #Traemos las probabilidades de muerte ajustadas para mujeres de la tabla PERF_2020_Colectivos_1Orden.
+        qx_ajustado = [w_male * qm + w_female * qf for qm, qf in zip(qx_male, qx_female)] #Combinamos las probabilidades de muerte ajustadas para hombres y mujeres. Asignando % de hombres y mujeres.
     elif nombre_tabla == "PER_2000P_UNISEX":
         # Combinar PERM2000P y PERF2000P
-        qx_male = procesar_tabla_base("PERM2000P")
-        qx_female = procesar_tabla_base("PERF2000P")
-        qx_ajustado = [w_male * qm + w_female * qf for qm, qf in zip(qx_male, qx_female)]
+        qx_male = procesar_tabla_base("PERM2000P") #Traemos las probabilidades de muerte ajustadas para hombres de la tabla PERM2000P.
+        qx_female = procesar_tabla_base("PERF2000P") #Traemos las probabilidades de muerte ajustadas para mujeres de la tabla PERF2000P.
+        qx_ajustado = [w_male * qm + w_female * qf for qm, qf in zip(qx_male, qx_female)] #Combinamos las probabilidades de muerte ajustadas para hombres y mujeres. Asignando % de hombres y mujeres.
     else:
-        raise ValueError(f"Tabla {nombre_tabla} no encontrada.")
+        raise ValueError(f"Tabla {nombre_tabla} no encontrada.") # Si el nombre de la tabla no está en la lista, lanza un error.
 
     # Crear el DataFrame de resultados
-    resultados = pd.DataFrame(columns=['Edad', 'x+t'])
-    resultados['x+t'] = x_mas_t_list
-    resultados['Edad'] = edad_t
+    resultados = pd.DataFrame(columns=['Edad', 'x+t']) # Creamos un DataFrame vacío con las columnas 'Edad' y 'x+t'.
+    resultados['x+t'] = x_mas_t_list # Asignamos la lista de edades x+t al DataFrame.
+    resultados['Edad'] = edad_t # Asignamos la lista de edades t al DataFrame.
 
-    resultados.insert(2, 'qx+t ajustado', qx_ajustado)
-    resultados.set_index('Edad', inplace=True)
+    resultados.insert(2, 'qx+t ajustado', qx_ajustado) # Asignamos la lista de probabilidades de muerte ajustadas al DataFrame. 2 indica la posición de la columna.
+    resultados.set_index('Edad', inplace=True) # Establecemos la columna 'Edad' como índice del DataFrame.
 
-    resultados['lx'] = 0.0
-    resultados.loc[0, 'lx'] = 1000000.0  # Suponemos 1,000,000 de asegurados al inicio
+    resultados['lx'] = 0.0 # Inicializamos la columna 'lx' con ceros.
+    resultados.loc[0, 'lx'] = 1000000.0  # Suponemos 1,000,000 de asegurados al inicio 
 
-    for i in range(1, len(resultados)):
-        resultados.loc[i, 'lx'] = resultados.loc[i-1, 'lx'] * (1 - resultados.loc[i-1, 'qx+t ajustado'])
+    for i in range(1, len(resultados)): # Iteramos desde 1 hasta la longitud de resultados para calcular lx.
+        resultados.loc[i, 'lx'] = resultados.loc[i-1, 'lx'] * (1 - resultados.loc[i-1, 'qx+t ajustado']) # Calculamos lx como lx anterior * (1 - qx+t ajustado).
 
-    resultados['dx'] = resultados['lx'] * resultados['qx+t ajustado']
+    resultados['dx'] = resultados['lx'] * resultados['qx+t ajustado'] # Calculamos dx como lx * qx+t ajustado.
 
-    print("Tabla generacional generada:")
-    print(resultados.head(10))
-    print(resultados.tail(10))
-
-    return resultados
+    return resultados # Devuelve el DataFrame con las columnas 'x+t', 'qx+t ajustado', 'lx' y 'dx'. Necesario para el cálculo de probabilidad de supervivencia k p_x.
 
     
-def interpolar_lx_fraccionada_completa(tabla_anual, edad_inicio, duracion, fracciones_por_anio=12):
-    resultados = []
-    max_edad = tabla_anual['x+t'].max()
-    for k_offset in range(duracion + 1):
-        edad = edad_inicio + k_offset
-        if edad > max_edad:
-            break
+def interpolar_lx_fraccionada_completa(tabla_anual, edad_inicio, duracion, fracciones_por_anio=12): #Interpolación lineal de lx para obtener valores fraccionados.
+    resultados = [] # Lista para almacenar los resultados de la interpolación.
+    max_edad = tabla_anual['x+t'].max() # Edad máxima en la tabla generacional.
+    for k_offset in range(duracion + 1): # Iteramos desde 0 hasta la duración.
+        edad = edad_inicio + k_offset # Edad actual en cada iteración.
+        if edad > max_edad: # Si la edad es mayor que la edad máxima, salir del bucle.
+            break 
         # Si edad + 1 no está en la tabla, asumir lx = 0 para edad + 1
-        if edad + 1 > max_edad:
-            lx_k1 = 0
-        else:
-            lx_k1 = tabla_anual.loc[tabla_anual['x+t'] == edad + 1, 'lx'].values[0]
-        for j in range(fracciones_por_anio):
-            fraccion = j / fracciones_por_anio
-            lx_k = tabla_anual.loc[tabla_anual['x+t'] == edad, 'lx'].values[0]
-            lx_interp = lx_k - (lx_k1 - lx_k) * fraccion
-            resultados.append({'k': edad, 'j': j, 'l_{x+k+j/fracciones}': lx_interp})
+        if edad + 1 > max_edad: # Si la edad + 1 es mayor que la edad máxima, asignar lx_k1 = 0.
+            lx_k1 = 0 
+        else: #Primero nos aseguramos que la edad + 1 no exceda la edad máxima, y luego procedemos a buscar el valor de lx_k1.
+            lx_k1 = tabla_anual.loc[tabla_anual['x+t'] == edad + 1, 'lx'].values[0] # Obtener lx_k1 para la edad + 1. values[0] devuelve el primer valor de la serie.
+        for j in range(fracciones_por_anio): # Iteramos sobre las fracciones por año.
+            fraccion = j / fracciones_por_anio # Calculamos la fracción actual. j es el índice de la iteración o por decir el subperíodo.
+            lx_k = tabla_anual.loc[tabla_anual['x+t'] == edad, 'lx'].values[0] # Obtener lx_k para la edad actual. values[0] devuelve el primer valor de la serie.
+            lx_interp = lx_k - (lx_k1 - lx_k) * fraccion #Como ya tenemos la lx_k y lx_k1, podemos calcular la interpolación lineal, aplicando la fórmula lx_k - (j/m)(lx_k1 - lx_k) 
+            resultados.append({'k': edad, 'j': j, 'l_{x+k+j/fracciones}': lx_interp}) #indicamos que lx_interp es igual a la interpolación lineal, y lo agregamos a la lista de resultados.
     return pd.DataFrame(resultados)
 
 def funcion_intereses(intereses, saltos=None, edad_renta=None, tabla_generacion=None, duracion=None):
@@ -218,39 +214,42 @@ def funcion_intereses(intereses, saltos=None, edad_renta=None, tabla_generacion=
         funcion_intereses(0.0275, duracion=6) -> [0, 0.0275, 0.0275, 0.0275, 0.0275, 0.0275, 0.0275]
     """
     # Calcular duración si no se proporciona
-    if duracion is None:
-        if edad_renta is None or tabla_generacion is None:
+    if duracion is None: 
+        if edad_renta is None or tabla_generacion is None: #Si edad_renta o tabla_generacion son None, lanzamos un error.
             raise ValueError("Se requiere edad_renta y tabla_generacion si duracion no está definida.")
-        duracion = int(tabla_generacion["x+t"].iloc[-1]) - edad_renta - 1
+        duracion = int(tabla_generacion["x+t"].iloc[-1]) - edad_renta - 1 #Duración = edad máxima - edad renta - 1. iloc[-1] obtiene la última fila de la tabla generacional.
 
     # Caso de interés fijo
-    if isinstance(intereses, (int, float)):
-        total_intereses = [intereses] * duracion
-        total_intereses.insert(0, 0)
-        return total_intereses
+    if isinstance(intereses, (int, float)): #isistance verifica si intereses es un número entero o flotante.
+        total_intereses = [intereses] * duracion # Creamos una lista de intereses con el mismo valor para toda la duración.
+        total_intereses.insert(0, 0) # Insertamos 0 al inicio de la lista.
+        return total_intereses # Devuelve la lista de intereses con el valor fijo.
 
     # Caso de interés variable
-    if saltos is None:
+    if saltos is None: # Si no se proporciona la lista de saltos, lanzamos un error.
         raise ValueError("Se requiere la lista de saltos para tasas de interés variables.")
     
     # Validaciones
-    if len(intereses) != len(saltos):
+    if len(intereses) != len(saltos): # Verificamos que las listas de intereses y saltos tengan la misma longitud. Hay que buscar la forma de mejorar esta parte
         raise ValueError("Las listas intereses y saltos deben tener la misma longitud.")
-    if not all(s1 < s2 for s1, s2 in zip(saltos[:-1], saltos[1:])):
+    if not all(s1 < s2 for s1, s2 in zip(saltos[:-1], saltos[1:])): #saltos[:-1] obtiene todos los elementos menos el último, y saltos[1:] obtiene todos los elementos menos el primero. Verificamos que los saltos estén en orden ascendente.
+        #not all es cuando all() es False (es decir, al menos un par no cumple con s1 < s2), la condición not all(...) es True, y se ejecuta el bloque dentro del if.
         raise ValueError("Los saltos deben estar en orden ascendente.")
-    if saltos[-1] < duracion:
+    if saltos[-1] < duracion: # Verificamos que el último salto sea mayor o igual a la duración.
         raise ValueError(f"Faltan años por determinar: el último salto ({saltos[-1]}) es menor que la duración ({duracion}).")
 
-    total_intereses = []
-    inicio = 0
-    for i in range(len(intereses)):
-        fin = saltos[i]
-        interes = intereses[i]
-        total_intereses.extend([interes] * (fin - inicio))
-        inicio = fin
-    total_intereses.insert(0, 0)
+    total_intereses = [] # Lista para almacenar los intereses totales.
+    inicio = 0 # Inicializamos el índice de inicio en 0.
+    for i in range(len(intereses)): # Iteramos sobre la lista de intereses.
+        fin = saltos[i] # Por cada i tomamos el salto correspondiente. Por ejemplo, si saltos = [2, 5, 7], en la primera iteración (i=0), fin = 2.
+        interes = intereses[i] # Tomamos el interés correspondiente al salto. Por ejemplo, si intereses = [0.01, 0.02, 0.03], en la primera iteración, interes = 0.01.
+        total_intereses.extend([interes] * (fin - inicio)) # Extendemos la lista de intereses totales con el interés correspondiente al rango (fin - inicio).
+        #Por ejemplo, si inicio = 0 y fin = 2, entonces fin - inicio = 2, lo que significa que el interés se aplica en 2 periodos. 
+        #[interes] * (fin - inicio): Crea una lista que contiene el valor interes repetido (fin - inicio) veces. Por ejemplo, si interes = 0.01 y fin - inicio = 2, se genera [0.01, 0.01].
+        inicio = fin #Actualiza inicio para que sea igual a fin, preparando el inicio del próximo rango. Esto asegura que el siguiente rango comience donde termina el actual, manteniendo una secuencia continua.
+    total_intereses.insert(0, 0) # Insertamos 0 al inicio de la lista de intereses totales.
 
-    return total_intereses
+    return total_intereses # Devuelve la lista de intereses totales con el valor fijo.
 
 def v(lista_intereses, t, fracciones_por_anio, tipo_renta="pospagable"):
     if lista_intereses is None:
@@ -281,7 +280,7 @@ def v(lista_intereses, t, fracciones_por_anio, tipo_renta="pospagable"):
             v_total *= (1 + interes_subperiodo) ** (-fraccion)
         return v_total
 
-def tpx(x, t=1, tabla_generacion=None, fracciones_por_anio=1):
+def tpx(x, t=1, tabla_generacion=None, fracciones_por_anio=1): #REVISAR
     """
     Calcula la probabilidad de supervivencia desde la edad x hasta x+t.
     
@@ -312,9 +311,9 @@ def tpx(x, t=1, tabla_generacion=None, fracciones_por_anio=1):
     fraccion_final = edad_final - k_final
     
     # Obtener lx para la edad inicial
-    if k_inicio not in tabla_generacion['x+t'].values:
+    if k_inicio not in tabla_generacion['x+t'].values: ## Si la edad inicial no está en la tabla, en la columna 'x+t' de la tabla generacional, lanzamos un error. .values devuelve un array de valores.
         raise ValueError(f"La edad inicial {k_inicio} no está en la tabla generacional.")
-    lx = tabla_generacion.loc[tabla_generacion['x+t'] == k_inicio, 'lx'].iloc[0]
+    lx = tabla_generacion.loc[tabla_generacion['x+t'] == k_inicio, 'lx'].iloc[0] # Obtener lx para la edad inicial. loc[tabla_generacion['x+t'] == k_inicio, 'lx'] selecciona la fila donde 'x+t' es igual a k_inicio y devuelve la columna 'lx'. iloc[0] obtiene el primer valor de la serie.
     
     # Obtener lx para el año completo de la edad final
     if k_final not in tabla_generacion['x+t'].values:
@@ -355,43 +354,52 @@ def geometrica(tipo_renta, k, q, diferimiento=None):
     Returns:
         float: Factor de ajuste geométrico.
     """
-    if q is None:
+    if q is None: # Si no se proporciona q, retornamos 1
         return 1
     
-    k = int(k)
-    q = float(q)
-    if tipo_renta == "prepagable":
-        if diferimiento is None:
+    k = int(k) # Convertir k a entero
+    q = float(q) # Convertir q a float
+    if tipo_renta == "prepagable":  # Si la renta es prepagable
+        if diferimiento is None: ## Si no hay diferimiento, el capital es q^k
             cap = (q**k)
         else:
-            diferimiento = int(diferimiento)
-            cap = q**(k-diferimiento)
-    elif tipo_renta == "pospagable":
-        if diferimiento is None:
-            cap = q**(k - 1)
+            diferimiento = int(diferimiento) # Convertir diferimiento a entero
+            cap = q**(k-diferimiento) # Si hay diferimiento, el capital es q^(k - diferimiento)
+    elif tipo_renta == "pospagable": # Si la renta es pospagable
+        if diferimiento is None: # Si no hay diferimiento, el capital es q^(k - 1)
+            cap = q**(k - 1) 
         else:
-            diferimiento = int(diferimiento)
-            cap = q**(k-diferimiento - 1)
-    return cap
+            diferimiento = int(diferimiento) # Convertir diferimiento a entero
+            cap = q**(k-diferimiento - 1) # Si hay diferimiento, el capital es q^(k - diferimiento - 1)
+    return cap # Retornar el capital ajustado
 
 def aritmetica(capital, tipo_renta, k, h, diferimiento=None):
     """
-    Versión corregida pero con la misma estructura original
+    Calcula el factor de ajuste aritmetico para el capital en una renta actuarial.
+    
+    Args:
+        tipo_renta (str): Tipo de renta ("prepagable" o "pospagable").
+        k (int): Período para el cual se calcula el factor de ajuste.
+        h (float): Factor de crecimiento aritmetico.
+        diferimiento (int or None): Período de diferimiento (None si no hay diferimiento).
+    
+    Returns:
+        float: Factor de ajuste aritmetico.
     """
-    if diferimiento is None:
+    if diferimiento is None: # Si no hay diferimiento, el capital es igual al capital inicial
         diferimiento = 0
     
     # Cálculo del período ajustado
-    if tipo_renta == "prepagable":
-        periodo_ajustado = k - diferimiento
-    else:  # pospagable
-        periodo_ajustado = k - diferimiento - 1
+    if tipo_renta == "prepagable": # Si la renta es prepagable
+        periodo_ajustado = k - diferimiento # Si hay diferimiento, el periodo ajustado es k - diferimiento
+    else:  # pospagable # Si la renta es pospagable
+        periodo_ajustado = k - diferimiento - 1 # Si hay diferimiento, el periodo ajustado es k - diferimiento - 1
     
     # Asegurarnos que no aplicamos incrementos antes del primer pago
-    if periodo_ajustado < 0:
-        return 0.0
+    if periodo_ajustado < 0: 
+        return 0.0 # Si el periodo ajustado es menor que 0, retornamos 0.0
     
-    return capital + periodo_ajustado * h
+    return capital + periodo_ajustado * h # Retornar el capital ajustado
 
 def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, lista_intereses=None, interes=None,
           tabla_generacion=None, tipo_ajuste=None, factor_q=None, incremento_h=None, fracciones_por_anio=12):
@@ -405,15 +413,16 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, lista_int
     
     # Determinar la duración máxima en fracciones
     if temporalidad is None:
-        w_menosx = int(tabla_generacion["x+t"].iloc[-1]) - edad_renta
-        total_fracciones = w_menosx * fracciones_por_anio
-    else:
+        w_menosx = int(tabla_generacion["x+t"].iloc[-1]) - edad_renta 
+        total_fracciones = w_menosx * fracciones_por_anio 
+    else: 
         total_fracciones = int(temporalidad * fracciones_por_anio)
 
     # Si se proporciona una tasa fija, generar una lista de tasas constantes
     if interes is not None:
         duracion_anios = total_fracciones // fracciones_por_anio + 1
-        lista_intereses = [0] + [interes] * duracion_anios
+        lista_intereses = [0] + [interes] * duracion_anios #[0] + [interes] * duracion_anios genera una lista que contiene 0 seguido de la tasa de interés repetida duracion_anios veces.
+        # Por ejemplo, si interes = 0.05 y duracion_anios = 5, la lista resultante sería [0, 0.05, 0.05, 0.05, 0.05, 0.05].
 
     if lista_intereses is None or len(lista_intereses) < 2:
         raise ValueError("lista_intereses no puede ser None o demasiado corta.")
@@ -422,7 +431,7 @@ def renta(tipo_renta, edad_renta, capital, temporalidad, diferimiento, lista_int
     tabla_fraccionada = interpolar_lx_fraccionada_completa(tabla_generacion, edad_renta, w_menosx if temporalidad is None else temporalidad, fracciones_por_anio)
 
     # Preparar la tabla de flujos
-    tabla_flujos = pd.DataFrame(columns=['k', 't', 'v^k', 'k p_x', 'v^k * k p_x', 'C * k p_x'])
+    tabla_flujos = pd.DataFrame(columns=['k', 't', 'v^k', 'k p_x', 'v^k * k p_x', 'C * k p_x']) # Creamos un DataFrame vacío con las columnas 'k', 't', 'v^k', 'k p_x', 'v^k * k p_x' y 'C * k p_x'.
 
     sumatorio = 0.0
     if tipo_renta == "prepagable":
@@ -705,7 +714,7 @@ def funcion_incrementos_variables(incrementos, saltos_incrementos, temporalidad=
     # Retornamos la lista completa de factores q_t para cada año t.
     return lista_qt
 
-def interpolar_lx_general(tabla_anual, edad_renta, diferimiento, duracion, fracciones_por_anio=1):
+def interpolar_lx_general(tabla_anual, edad_renta, diferimiento, duracion, fracciones_por_anio=1): #REVISAR
     """
     Interpola lx para fracciones de año y calcula k p_x para rentas con o sin diferimiento.
     
@@ -864,7 +873,7 @@ def generar_tabla_flujos(tabla_generacion, edad_renta, diferimiento, tipo_renta,
     # Las columnas representan:
     # - k: Año actuarial (entero).
     # - t: Tiempo absoluto (puede incluir fracciones).
-    # - t_relativo: Tiempo relativo al inicio de la renta.
+    # - t_relativo: Tiempo relativo al inicio de la renta. 
     # - j: Subperíodo dentro del año.
     # - k p_x: Probabilidad de supervivencia.
     tabla = pd.DataFrame(columns=['k', 't', 't_relativo', 'j', 'k p_x'])
@@ -917,7 +926,7 @@ def generar_tabla_flujos(tabla_generacion, edad_renta, diferimiento, tipo_renta,
             # Calculamos t_relativo: el tiempo relativo al inicio de la renta.
             # Restamos el diferimiento a t para obtener el tiempo transcurrido desde el inicio de los pagos.
             # Ejemplo: t=17.0833, diferimiento=2 → t_relativo = 17.0833 - 2 = 15.0833.
-            t_relativo = t - (diferimiento or 0)
+            t_relativo = t - (diferimiento or 0) 
 
             # Calculamos k p_x: probabilidad de que una persona de edad_renta sobreviva hasta el tiempo t.
             # La función tpx (no definida aquí) calcula esta probabilidad usando la tabla generacional.
@@ -983,7 +992,7 @@ def calcular_ck(t_relativo, k, tipo_renta, capital, factores, fracciones_por_ani
         # El diferimiento está en el diccionario factores.
         diferimiento = int(float(factores.get('diferimiento', 0)))  # 17.
         # Ejemplo: Si k=17 y diferimiento=2, anio_actuarial=17-2=15.
-        anio_actuarial = k - diferimiento  # Ajuste: quitar el -1.
+        anio_actuarial = k - diferimiento  
     else:
         # Para rentas prepagables, usamos t_relativo directamente.
         # Como t_relativo ya está ajustado por el diferimiento, lo convertimos a entero.
