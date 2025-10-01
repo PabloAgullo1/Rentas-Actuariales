@@ -2,11 +2,23 @@
 import pandas as pd
 import numpy as np
 import math
+import sys, os
 
 #BLOQUE 1 
 
+#para poder exportarlo
+import sys, os
+
+def ruta_recurso(rel_path):
+    """Obtiene la ruta correcta para acceder a archivos cuando el programa
+    corre como .py o como .exe empaquetado con PyInstaller"""
+    if hasattr(sys, "_MEIPASS"):  # Cuando corre empaquetado
+        return os.path.join(sys._MEIPASS, rel_path)
+    return os.path.join(os.path.abspath("."), rel_path)
+
+
 # Cargar todas las hojas en un diccionario de DataFrames
-excel_tablas = "Tablas PER 2000 y 2020.xlsx"
+excel_tablas = ruta_recurso("Tablas PER 2000 y 2020.xlsx")
 hojas = pd.read_excel(excel_tablas, sheet_name=None, header=1)
 
 def generacion(g, nombre_tabla):
