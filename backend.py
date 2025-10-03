@@ -10,8 +10,10 @@ import sys, os
 import sys, os
 
 def ruta_recurso(rel_path):
-    """Obtiene la ruta correcta para acceder a archivos cuando el programa
-    corre como .py o como .exe empaquetado con PyInstaller"""
+    """
+    Obtiene la ruta correcta para acceder a archivos cuando el programa
+    corre como .py o como .exe empaquetado con PyInstaller
+    """
     if hasattr(sys, "_MEIPASS"):  # Cuando corre empaquetado
         return os.path.join(sys._MEIPASS, rel_path)
     return os.path.join(os.path.abspath("."), rel_path)
